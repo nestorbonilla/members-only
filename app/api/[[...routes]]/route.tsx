@@ -1,6 +1,6 @@
 /** @jsxImportSource frog/jsx */
 
-import { Button, Frog, TextInput } from 'frog'
+import { Button, FrameContext, Frog, TextInput } from 'frog'
 import { devtools } from 'frog/dev'
 import { neynar } from 'frog/hubs'
 import { handle } from 'frog/next'
@@ -19,7 +19,10 @@ const app = new Frog({
 // Uncomment to use Edge Runtime
 // export const runtime = 'edge'
 
-app.frame('/', (c) => {
+app.frame('/:checkoutId', (c: FrameContext) => {
+  const checkoutId = c.req.param('checkoutId');
+  const checkoutUrl = `https://app.unlock-protocol.com/checkout?id=${checkoutId}`;
+  console.log("checkoutId: ", checkoutUrl);
   const { buttonValue, inputText, status } = c
   const fruit = inputText || buttonValue
   return c.res({
@@ -54,16 +57,14 @@ app.frame('/', (c) => {
           }}
         >
           {status === 'response'
-            ? `Nice choice.${fruit ? ` ${fruit.toUpperCase()}!!` : ''}`
-            : 'Welcome!'}
+            ? `Nice choice.${checkoutUrl} ${fruit ? ` ${fruit.toUpperCase()}!!` : ''}`
+            : `Welcome! ${checkoutUrl}`}
         </div>
       </div>
     ),
     intents: [
       <TextInput placeholder="Enter custom fruit..." />,
-      <Button value="apples">Apples</Button>,
-      <Button value="oranges">Oranges</Button>,
-      <Button value="bananas">Bananas</Button>,
+      <Button.Link href={checkoutUrl}>Mint</Button.Link>,
       status === 'response' && <Button.Reset>Reset</Button.Reset>,
     ],
   })
@@ -80,7 +81,7 @@ app.hono.post("/validate", async (c) => {
     console.log("result: ", body);
     console.log("useAddresses: ", userAddresses);
     // let validMembership = await hasMembership(userAddresses[0]);
-    let validMembership = true;
+    let validMembership = false;
 
     if (validMembership) {
       let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash, { idem: 'my-reaction-idem' });
@@ -100,7 +101,7 @@ app.hono.post("/validate", async (c) => {
           idem: 'my-cast-idem',
           embeds: [
             {
-              url: 'FRAME_URL',
+              url: 'https://app.unlock-protocol.com/checkout?id=9c3d6b6c-d3d1-424e-a5f0-b2489a68fbed', // Get at https://app.unlock-protocol.com/locks/checkout-url
             }]
         }
       );
