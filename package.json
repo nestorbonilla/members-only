@@ -1,0 +1,30 @@
+{
+  "name": "unlock-me2",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "deploy": "vercel",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@neynar/nodejs-sdk": "^1.28.0",
+    "@unlock-protocol/networks": "^0.0.23",
+    "@unlock-protocol/unlock-js": "^0.46.1",
+    "ethers": "^5.6.5",
+    "frog": "latest",
+    "hono": "^4",
+    "next": "14.1.0",
+    "react": "^18",
+    "react-dom": "^18"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "^20",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "vercel": "^32.4.1"
+  }
+}
