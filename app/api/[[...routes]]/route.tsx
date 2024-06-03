@@ -101,7 +101,7 @@ app.hono.post("/validate", async (c) => {
           idem: 'my-cast-idem',
           embeds: [
             {
-              url: 'https://app.unlock-protocol.com/checkout?id=9c3d6b6c-d3d1-424e-a5f0-b2489a68fbed', // Get at https://app.unlock-protocol.com/locks/checkout-url
+              url: 'https://unlock-me-lemon.vercel.app/api/9c3d6b6c-d3d1-424e-a5f0-b2489a68fbed', // Get at https://app.unlock-protocol.com/locks/checkout-url
             }]
         }
       );
