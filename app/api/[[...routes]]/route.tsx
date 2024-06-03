@@ -19,6 +19,54 @@ const app = new Frog({
 // Uncomment to use Edge Runtime
 // export const runtime = 'edge'
 
+app.hono.post("/validate", async (c) => {
+  try {
+    const body = await c.req.json();
+
+    let fid = body.data.author.fid;
+    let username = body.data.author.username;
+    let castHash = body.data.hash;
+    const userAddresses = await getDistinctAddresses(fid);
+    console.log("result: ", body);
+    console.log("useAddresses: ", userAddresses);
+    // let validMembership = await hasMembership(userAddresses[0]);
+    let validMembership = false;
+
+    if (validMembership) {
+      let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash);
+      console.log("Cast reaction successful:", castReactionResponse);
+      return c.json({ message: "Cast reaction successful!" });
+    } else {
+      let message = `Hey @${username}, it looks like you don't have a subscription yet. Let me help you with that.`;
+      // const castResponse = await neynarClient.publishCast(
+      //   process.env.SIGNER_UUID!,
+      //   message,
+      //   { idem: 'my-cast-idem' }
+      // );
+      const castResponse = await neynarClient.publishCast(
+        process.env.SIGNER_UUID!,
+        message,
+        {
+          embeds: [
+            {
+              url: 'https://2fd6-47-147-81-136.ngrok-free.app/api/9c3d6b6c-d3d1-424e-a5f0-b2489a68fbed', // Get at https://app.unlock-protocol.com/locks/checkout-url
+            }]
+        }
+      );
+      if (!castResponse.hash) {
+        return c.json({ message: 'Error casting message.' }, 500);
+      }
+      const castData = (await castResponse).text;
+      console.log("Cast successful:", castData);
+
+      return c.json({ message: "Cast successful!" });
+    }
+  } catch (e) {
+    console.error("Error:", e);
+    return c.json({ message: "Error processing request." }, 500);
+  }
+});
+
 app.frame('/:checkoutId', (c: FrameContext) => {
   const checkoutId = c.req.param('checkoutId');
   const checkoutUrl = `https://app.unlock-protocol.com/checkout?id=${checkoutId}`;
@@ -69,55 +117,6 @@ app.frame('/:checkoutId', (c: FrameContext) => {
     ],
   })
 })
-
-app.hono.post("/validate", async (c) => {
-  try {
-    const body = await c.req.json();
-
-    let fid = body.data.author.fid;
-    let username = body.data.author.username;
-    let castHash = body.data.hash;
-    const userAddresses = await getDistinctAddresses(fid);
-    console.log("result: ", body);
-    console.log("useAddresses: ", userAddresses);
-    // let validMembership = await hasMembership(userAddresses[0]);
-    let validMembership = false;
-
-    if (validMembership) {
-      let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash, { idem: 'my-reaction-idem' });
-      console.log("Cast reaction successful:", castReactionResponse);
-      return c.json({ message: "Cast reaction successful!" });
-    } else {
-      let message = `Hey @${username}, it looks like you don't have a subscription yet. Let me help you with that.`;
-      // const castResponse = await neynarClient.publishCast(
-      //   process.env.SIGNER_UUID!,
-      //   message,
-      //   { idem: 'my-cast-idem' }
-      // );
-      const castResponse = await neynarClient.publishCast(
-        process.env.SIGNER_UUID!,
-        message,
-        {
-          idem: 'my-cast-idem',
-          embeds: [
-            {
-              url: 'https://unlock-me-lemon.vercel.app/api/9c3d6b6c-d3d1-424e-a5f0-b2489a68fbed', // Get at https://app.unlock-protocol.com/locks/checkout-url
-            }]
-        }
-      );
-      if (!castResponse.hash) {
-        return c.json({ message: 'Error casting message.' }, 500);
-      }
-      const castData = (await castResponse).text;
-      console.log("Cast successful:", castData);
-
-      return c.json({ message: "Cast successful!" });
-    }
-  } catch (e) {
-    console.error("Error:", e);
-    return c.json({ message: "Error processing request." }, 500);
-  }
-});
 
 const getDistinctAddresses = async (fid: string): Promise<Address[]> => {
   let fetchedUsers: any = await neynarClient.fetchBulkUsers([Number(fid)]);
