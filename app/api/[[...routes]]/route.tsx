@@ -13,7 +13,7 @@ import { hasMembership } from '@/app/utils/unlock/membership'
 import { createClient } from '@/app/utils/supabase/server'
 
 const APP_URL = process.env.APP_URL;
-let BOT_SETUP_TEXT = process.env.BOT_SETUP_TEXT; // edit to @membersonly setup
+const BOT_SETUP_TEXT = process.env.BOT_SETUP_TEXT; // edit to @membersonly setup
 
 const app = new Frog({
   assetsPath: '/',
@@ -296,7 +296,7 @@ export const POST = handle(app)
 
 function isSetupCast(castText: string): boolean {
   // Pending to verify if I need to validate if parent cast is a setup cast too
-  return castText.trim().toLowerCase() === BOT_SETUP_TEXT.toLowerCase(); // Case-insensitive check
+  return castText.trim().toLowerCase() === BOT_SETUP_TEXT!.toLowerCase(); // Case-insensitive check
 }
 
 function getLastPartOfUrl(url: string) {
