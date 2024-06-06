@@ -1,7 +1,7 @@
 // import { paywallConfig } from "~/config/unlock";
 import { base, networks } from "@unlock-protocol/networks";
 import { Web3Service } from "@unlock-protocol/unlock-js";
-import { Membership } from "./types";
+import { Membership } from "@/app/types";
 interface GetHasValidKeyOptions {
   network: number;
   lockAddress: string;
@@ -55,23 +55,38 @@ export async function getValidKey({
   } as Membership;
 }
 
-export async function getValidMemberships(userAddress: string) {
-  const promises = Object.keys(paywallConfig.locks as any).map(
-    (lockAddress) => {
-      return getValidKey({
-        lockAddress,
-        userAddress,
-        network: (paywallConfig.locks as any)[lockAddress].network,
-      });
-    }
-  );
-  const results = await Promise.all(promises);
-  return results as Membership[];
-}
+// export async function getValidMemberships(userAddress: string) {
+//   const promises = Object.keys(paywallConfig.locks as any).map(
+//     (lockAddress) => {
+//       return getValidKey({
+//         lockAddress,
+//         userAddress,
+//         network: (paywallConfig.locks as any)[lockAddress].network,
+//       });
+//     }
+//   );
+//   const results = await Promise.all(promises);
+//   return results as Membership[];
+// }
+
+// export async function hasMembership(userAddress: string) {
+//   const results = await getValidMemberships(userAddress);
+//   return !!results.length;
+// }
 
 export async function hasMembership(userAddress: string) {
-  const results = await getValidMemberships(userAddress);
-  return !!results.length;
+  for (const [lockAddress, { network }] of Object.entries<{ network: number }>(
+    paywallConfig.locks
+  )) {
+    if (await web3Service.getHasValidKey(
+      lockAddress,
+      userAddress,
+      network
+    )) {
+      return true;
+    }
+  }
+  return false;
 }
 
 export async function fetchJson<JSON = unknown>(
