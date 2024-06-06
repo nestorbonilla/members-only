@@ -12,8 +12,8 @@ import { Address } from 'viem'
 import { hasMembership } from '@/app/utils/unlock/membership'
 import { createClient } from '@/app/utils/supabase/server'
 
-const APP_URL = process.env.APP_URL || "https://604d-47-147-81-136.ngrok-free.app";
-let BOT_SETUP_TEXT = "@undefined setup"; // edit to @membersonly setup
+const APP_URL = process.env.APP_URL;
+let BOT_SETUP_TEXT = process.env.BOT_SETUP_TEXT; // edit to @membersonly setup
 
 const app = new Frog({
   assetsPath: '/',
