@@ -7,22 +7,21 @@ import { handle } from 'frog/next'
 import { serveStatic } from 'frog/serve-static'
 import neynarClient from '@/app/utils/neynar/client'
 
-import { Cast, Channel, ReactionType } from '@neynar/nodejs-sdk/build/neynar-api/v2'
+import { Cast, Channel, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2'
 import { Address } from 'viem'
 import { hasMembership } from '@/app/utils/unlock/membership'
 import { createClient } from '@/app/utils/supabase/server'
+
+const { Network, Alchemy } = require("alchemy-sdk");
 
 const APP_URL = process.env.APP_URL;
 const BOT_SETUP_TEXT = process.env.BOT_SETUP_TEXT; // edit to @membersonly setup
 
 const app = new Frog({
   assetsPath: '/',
-  origin: APP_URL,
   basePath: '/api',
   hub: neynar({ apiKey: process.env.NEYNAR_API_KEY! }),
-  imageOptions: {
-    format: "png",
-  },
+  // verify: process.env.NODE_ENV === 'production'
 })
 
 // Uncomment to use Edge Runtime
@@ -50,7 +49,7 @@ app.hono.post("/hook-setup", async (c) => {
     let castText = cast.text;
 
     if (channelLead == castAuthor && castText == BOT_SETUP_TEXT) {
-      console.log("frame url: ", `${APP_URL}/api/frame-setup/${channelId}`);
+      console.log("frame url: ", `${APP_URL}/api/frame-channel/${channelId}`);
       const castResponse = await neynarClient.publishCast(
         process.env.SIGNER_UUID!,
         "",
@@ -129,11 +128,11 @@ app.hono.post("/hook-validate", async (c) => {
   }
 });
 
-app.frame('/frame-setup/:channelId', (c: FrameContext) => {
-  console.log("call start: frame-setup");
+app.frame('/frame-channel/:channelId', (c: FrameContext) => {
+  console.log("call start: frame-setup/:channelId");
   const channelId = c.req.param('channelId');
   const { buttonValue, status } = c;
-  console.log("call end: frame-setup");
+  console.log("call end: frame-setup/:channelId");
   return c.res({
     image: (
       <div
@@ -172,7 +171,7 @@ app.frame('/frame-setup/:channelId', (c: FrameContext) => {
       </div>
     ),
     intents: [
-      <Button action='/frame-contract/base'>Base</Button>,
+      <Button action='/frame-contract/base/'>Base</Button>,
       <Button action='/frame-contract/optimism'>Optimism</Button>,
       <Button action='/frame-contract/arbitrum'>Arbitrum</Button>,
       status === 'response' && <Button.Reset>Reset</Button.Reset>,
@@ -180,9 +179,36 @@ app.frame('/frame-setup/:channelId', (c: FrameContext) => {
   })
 });
 
-app.frame('/frame-contract/:chain', (c: FrameContext) => {
+app.frame('/frame-contract/:chain/:page', async (c: FrameContext) => {
+  console.log("call start: frame-contract/:chain");
+  const payload = await c.req.json();
+
+  // Validate the frame action response
+  const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+
+  // Get the chain from the URL and create an Alchemy instance for the specified network
   const chain = c.req.param('chain');
-  const { buttonValue, inputText, status } = c
+  const page = c.req.param('page');
+  console.log("chain and page: ", chain, page);
+  const alchemy = new Alchemy({
+    apiKey: process.env.ALCHEMY_API_KEY, // Think about better approach for multiple chains
+    network: chain == "base" ? Network.Base : Network.Optimism,
+  });
+
+  // Get a list of deployed contracts for each verified Ethereum address
+  let ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
+  let allContractAddresses = await Promise.all(ethAddresses.map(async (ethAddress) => {
+    console.log("contractAddress: ", ethAddress);
+    const contractAddresses = await findContractsDeployed(ethAddress, alchemy);
+    return contractAddresses;
+  }));
+  allContractAddresses = allContractAddresses.flat();
+  console.log("allContractAddresses: ", allContractAddresses);
+
+  let prevContract = `/frame-contract/${chain}/:0`;
+  let nextContract = `/frame-contract/${chain}/:0`;
+  const { buttonValue, inputText, status } = c;
+  console.log("call end: frame-contract/:chain");
   return c.res({
     image: (
       <div
@@ -212,14 +238,19 @@ app.frame('/frame-contract/:chain', (c: FrameContext) => {
             marginTop: 30,
             padding: '0 120px',
             whiteSpace: 'pre-wrap',
+            display: 'flex',
           }}
         >
-          Hey ${chain}
+          Hey {chain}
         </div>
       </div>
     ),
     intents: [
-      <Button action='/frame-contract-confirmation/0x'>Contract</Button>,
+      <TextInput placeholder="Contract Address..." />,
+      <Button action={prevContract}>prev</Button>,
+      <Button action={nextContract}>next</Button>,
+      <Button.Reset>back</Button.Reset>,
+      <Button action='/frame-channel/:channelId'>custom</Button>,
     ],
   })
 });
@@ -303,4 +334,47 @@ function getLastPartOfUrl(url: string) {
   const urlObj = new URL(url);
   const parts = urlObj.pathname.split('/');
   return parts[parts.length - 1];
+}
+
+// Define the asynchronous function that will retrieve deployed contracts
+async function findContractsDeployed(address: string, alchemy: any) {
+  const transfers = [];
+
+  // Paginate through the results using getAssetTransfers method
+  let response = await alchemy.core.getAssetTransfers({
+    fromBlock: "0x0",
+    toBlock: "latest", // Fetch results up to the latest block
+    fromAddress: address, // Filter results to only include transfers from the specified address
+    excludeZeroValue: false, // Include transfers with a value of 0
+    category: ["external"], // Filter results to only include external transfers
+  });
+  transfers.push(...response.transfers);
+
+  // Continue fetching and aggregating results while there are more pages
+  while (response.pageKey) {
+    let pageKey = response.pageKey;
+    response = await alchemy.core.getAssetTransfers({
+      fromBlock: "0x0",
+      toBlock: "latest",
+      fromAddress: address,
+      excludeZeroValue: false,
+      category: ["external"],
+      pageKey: pageKey,
+    });
+    transfers.push(...response.transfers);
+  }
+
+  // Filter the transfers to only include contract deployments (where 'to' is null)
+  const deployments = transfers.filter((transfer) => transfer.to === null);
+  const txHashes = deployments.map((deployment) => deployment.hash);
+
+  // Fetch the transaction receipts for each of the deployment transactions
+  const promises = txHashes.map((hash) =>
+    alchemy.core.getTransactionReceipt(hash)
+  );
+
+  // Wait for all the transaction receipts to be fetched
+  const receipts = await Promise.all(promises);
+  const contractAddresses = receipts.map((receipt) => receipt?.contractAddress);
+  return contractAddresses;
 }
