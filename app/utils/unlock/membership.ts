@@ -8,7 +8,7 @@ interface GetHasValidKeyOptions {
   userAddress: string;
 }
 
-export const paywallConfig = {
+const paywallConfig = {
   locks: {
     '0x99c1e087ba034c655deff866e9e043fff1abb7e3': {
       name: '8453',
@@ -17,13 +17,10 @@ export const paywallConfig = {
   }
 }
 
-export const web3Service = new Web3Service({
+const web3Service = new Web3Service({
   "8453": {
-    publicProvider: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}/`,
-    provider: `https://base-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}/`,
-    unlockAddress: "0x99c1e087ba034c655deff866e9e043fff1abb7e3",
-    id: 8453,
-    name: "Base Mainnet",
+    publicProvider: `${process.env.ALCHEMY_URL_BASE}${process.env.ALCHEMY_API_KEY}/`,
+    provider: `${process.env.ALCHEMY_URL_BASE}${process.env.ALCHEMY_API_KEY}/`,
   },
 });
 
@@ -55,6 +52,9 @@ export async function getValidKey({
   } as Membership;
 }
 
+export const getLockMetadata = async (lockAddress: string) => {
+  return await web3Service.getLock(lockAddress, 8453);
+}
 // export async function getValidMemberships(userAddress: string) {
 //   const promises = Object.keys(paywallConfig.locks as any).map(
 //     (lockAddress) => {

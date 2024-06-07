@@ -1,15 +1,15 @@
 /** @jsxImportSource frog/jsx */
 
-import { Button, FrameContext, Frog, TextInput } from 'frog'
-import { devtools } from 'frog/dev'
-import { neynar } from 'frog/hubs'
-import { handle } from 'frog/next'
-import { serveStatic } from 'frog/serve-static'
-import neynarClient from '@/app/utils/neynar/client'
-import { Cast, Channel, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
+import { Button, Frog, TextInput } from 'frog';
+import { devtools } from 'frog/dev';
+import { neynar } from 'frog/hubs';
+import { handle } from 'frog/next';
+import { serveStatic } from 'frog/serve-static';
+import neynarClient from '@/app/utils/neynar/client';
+import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
 import { Address } from 'viem';
 import { hasMembership } from '@/app/utils/unlock/membership';
-import { createClient } from '@/app/utils/supabase/server'
+import { createClient } from '@/app/utils/supabase/server';
 const { Network } = require('alchemy-sdk');
 
 const APP_URL = process.env.APP_URL;
@@ -23,7 +23,7 @@ const app = new Frog({
   assetsPath: '/',
   basePath: '/api',
   hub: neynar({ apiKey: NEYNAR_API_KEY! }),
-  verify: process.env.NODE_ENV === 'production'
+  verify: process.env.NODE_ENV === 'production' // leave it as is, if not issue with frog local debug tool
 })
 
 // Uncomment to use Edge Runtime
@@ -39,8 +39,10 @@ app.hono.post("/hook-setup", async (c) => {
 
     // 1. Validate the cast author is the owner of the channel
     // 1.1 Get the channel owner
-    let channelId = getLastPartOfUrl(cast.root_parent_url!);
-    let channels: Array<Channel> = (await neynarClient.searchChannels(channelId)).channels;
+    console.log("call start: hook-setup => fetchBulkChannels");
+    let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([cast.parent_url!], { type: ChannelType.ParentUrl })).channels;
+    !channels || channels.length == 0 ? c.json({ message: `Channel not found with parent_url ${cast.parent_url}` }, 404) : null;
+    let channelId = channels[0].id;
     let channelLead = channels[0].lead?.fid;
 
     // 1.2 Get the cast author
@@ -50,6 +52,7 @@ app.hono.post("/hook-setup", async (c) => {
     // Probably second validation will be removed and just validated on the hook
     let castText = cast.text;
 
+    console.log("call start: hook-setup => castAuthor == castText");
     if (channelLead == castAuthor && castText == BOT_SETUP_TEXT) {
       console.log("frame url: ", `${APP_URL}/api/frame-setup-channel/${channelId}`);
       const castResponse = await neynarClient.publishCast(
@@ -131,17 +134,11 @@ app.hono.post("/hook-validate", async (c) => {
   }
 });
 
-app.frame('/frame-setup-channel/:channelId', async (c: FrameContext) => {
+app.frame('/frame-setup-channel/:channelId', async (c) => {
   console.log("call start: frame-setup-channel/:channelId");
+  const { req } = c;
 
-  const payload = await c.req.json();
-  console.log("/frame-setup-channel/:channelId => messageBytes: ", payload.trustedData.messageBytes);
-  // Validate the frame action response
-  const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-  console.log("/frame-setup-channel/:channelId => frameActionResponse: ", frameActionResponse);
-
-
-  const channelId = c.req.param('channelId');
+  const channelId = req.param('channelId');
 
   let dynamicIntents = [];
   let nextFrame = "frame-setup-channel-action";
@@ -214,7 +211,7 @@ app.frame('/frame-setup-channel/:channelId', async (c: FrameContext) => {
   })
 });
 
-app.frame('/frame-setup-channel-action/:channelId/:action', async (c: FrameContext) => {
+app.frame('/frame-setup-channel-action/:channelId/:action', async (c) => {
   console.log("call start: frame-channel-action/:channelId/:action");
   const channelId = c.req.param('channelId');
   const action = c.req.param('action');
@@ -225,110 +222,117 @@ app.frame('/frame-setup-channel-action/:channelId/:action', async (c: FrameConte
   let prevFrame = "frame-setup-channel";
   let firstPage = 0;
 
-  // if (action == "add") {
-  nextFrame = "frame-setup-contract";
-  dynamicIntents = [
-    <Button action={`/${nextFrame}/base/${firstPage}`}>Base</Button>,
-    <Button action={`/${nextFrame}/optimism/${firstPage}`}>Optimism</Button>,
-    <Button action={`/${nextFrame}/arbitrum/${firstPage}`}>Arbitrum</Button>,
-    <Button action={`/${nextFrame}/other/${firstPage}`}>Other</Button>,
-  ];
-  console.log("call end: frame-channel/:channelId");
-  return c.res({
-    image: (
-      <div
-        style={{
-          alignItems: 'center',
-          background: 'black',
-          backgroundSize: '100% 100%',
-          display: 'flex',
-          flexDirection: 'column',
-          flexWrap: 'nowrap',
-          height: '100%',
-          justifyContent: 'center',
-          textAlign: 'center',
-          width: '100%',
-        }}
-      >
+  if (action == "add") {
+    nextFrame = "frame-setup-contract";
+    dynamicIntents = [
+      <Button action={`/${nextFrame}/base/${firstPage}`}>Base</Button>,
+      <Button action={`/${nextFrame}/optimism/${firstPage}`}>Optimism</Button>,
+      <Button action={`/${nextFrame}/arbitrum/${firstPage}`}>Arbitrum</Button>,
+      <Button action={`/${nextFrame}/other/${firstPage}`}>Other</Button>,
+    ];
+    console.log("call end: frame-channel-action/:channelId/:action");
+    return c.res({
+      image: (
         <div
           style={{
-            color: 'white',
-            fontSize: 60,
-            fontStyle: 'normal',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.4,
-            marginTop: 30,
-            padding: '0 120px',
-            whiteSpace: 'pre-wrap',
+            alignItems: 'center',
+            background: 'black',
+            backgroundSize: '100% 100%',
             display: 'flex',
+            flexDirection: 'column',
+            flexWrap: 'nowrap',
+            height: '100%',
+            justifyContent: 'center',
+            textAlign: 'center',
+            width: '100%',
           }}
-
         >
-          To add a rule on channel {channelId}, start by selecting the network the contract is deployed on.
-        </div>
-      </div>
-    ),
-    intents: dynamicIntents,
-  })
-  // } else //if (action == "remove")
-  // {
-  //   nextFrame = "frame-setup-remove";
-  //   let conditions = 0;
-  //   // Get the channel access rules
-  //   const supabaseClient = createClient();
-  //   const { data, error } = await supabaseClient
-  //     .from('channel_access_rules')
-  //     .select('*')
-  //     .eq('channel_id', channelId)
-  //     .order('created_at', { ascending: false })
-  //     .limit(ACCESS_RULES_LIMIT);
-  //   if (data?.length! > 0) {
-  //     conditions = data!.length;
-  //   }
-  //   console.log("call end: frame-channel/:channelId");
-  //   return c.res({
-  //     image: (
-  //       <div
-  //         style={{
-  //           alignItems: 'center',
-  //           background: 'black',
-  //           backgroundSize: '100% 100%',
-  //           display: 'flex',
-  //           flexDirection: 'column',
-  //           flexWrap: 'nowrap',
-  //           height: '100%',
-  //           justifyContent: 'center',
-  //           textAlign: 'center',
-  //           width: '100%',
-  //         }}
-  //       >
-  //         <div
-  //           style={{
-  //             color: 'white',
-  //             fontSize: 60,
-  //             fontStyle: 'normal',
-  //             letterSpacing: '-0.025em',
-  //             lineHeight: 1.4,
-  //             marginTop: 30,
-  //             padding: '0 120px',
-  //             whiteSpace: 'pre-wrap',
-  //             display: 'flex',
-  //           }}
+          <div
+            style={{
+              color: 'white',
+              fontSize: 60,
+              fontStyle: 'normal',
+              letterSpacing: '-0.025em',
+              lineHeight: 1.4,
+              marginTop: 30,
+              padding: '0 120px',
+              whiteSpace: 'pre-wrap',
+              display: 'flex',
+            }}
 
-  //         >
-  //           Select the condition you want to remove from channel {channelId}.
-  //         </div>
-  //       </div>
-  //     ),
-  //     intents: [
-  //       // pending to add
-  //     ],
-  //   })
-  // }
+          >
+            To add a rule on channel {channelId}, start by selecting the network the contract is deployed on.
+          </div>
+        </div>
+      ),
+      intents: dynamicIntents,
+    })
+  } else //if (action == "remove")
+  {
+    nextFrame = "frame-setup-remove";
+    dynamicIntents = [
+      <Button action={`/${nextFrame}/base/${firstPage}`}>Prev</Button>,
+      <Button action={`/${nextFrame}/optimism/${firstPage}`}>Next</Button>,
+      <Button action={`/${nextFrame}/arbitrum/${firstPage}`}>Confirm</Button>
+    ];
+    console.log("call end: frame-channel-action/:channelId/:action");
+    let conditions = 0;
+    // Get the channel access rules
+    const supabaseClient = createClient();
+    const { data, error } = await supabaseClient
+      .from('channel_access_rules')
+      .select('*')
+      .eq('channel_id', channelId)
+      .order('created_at', { ascending: false })
+      .limit(ACCESS_RULES_LIMIT);
+    if (data?.length! > 0) {
+      conditions = data!.length;
+    }
+    console.log("call end: frame-channel/:channelId");
+    return c.res({
+      image: (
+        <div
+          style={{
+            alignItems: 'center',
+            background: 'black',
+            backgroundSize: '100% 100%',
+            display: 'flex',
+            flexDirection: 'column',
+            flexWrap: 'nowrap',
+            height: '100%',
+            justifyContent: 'center',
+            textAlign: 'center',
+            width: '100%',
+          }}
+        >
+          <div
+            style={{
+              color: 'white',
+              fontSize: 60,
+              fontStyle: 'normal',
+              letterSpacing: '-0.025em',
+              lineHeight: 1.4,
+              marginTop: 30,
+              padding: '0 120px',
+              whiteSpace: 'pre-wrap',
+              display: 'flex',
+            }}
+
+          >
+            Is this the rule you want to remove from channel {channelId}?
+          </div>
+        </div>
+      ),
+      intents: dynamicIntents,
+    })
+  }
 });
 
-app.frame('/frame-setup-contract/:network/:page', async (c: FrameContext) => {
+app.frame('/frame-setup-contract/:network/:page', async (c) => {
   console.log("call start: frame-setup-contract/:network/:page");
+  const { buttonValue, inputText, status, req } = c;
+  const payload = await req.json();
+  // console.log("payload: ", payload);
   let nextFrame = "";
   let dynamicIntents = [];
   const network = c.req.param('network');
@@ -338,20 +342,13 @@ app.frame('/frame-setup-contract/:network/:page', async (c: FrameContext) => {
   let textFrame = "";
   let channelId = "unlock";
 
-  const payload = await c.req.json();
-  console.log("messageBytes: ", payload.trustedData.messageBytes);
-  // Validate the frame action response
-  const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-  console.log("frameActionResponse: ", frameActionResponse);
 
+  // console.log("messageBytes: ", payload.trustedData.messageBytes);
+  // // Validate the frame action response
+  // const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+  // console.log("frameActionResponse: ", frameActionResponse);
 
-
-  // If the channel is setup, show the contract name, if not, say let's setup the channel
-
-
-  // Get the chain from the URL and create an Alchemy instance for the specified network
-
-
+  // pending to get eth addresses from account
   let ethAddresses = ["0xe8f5533ba4c562b2162e8cf9b769a69cd28e811d"];
   const contractAddresses: string[] = (
     await Promise.all(
@@ -360,8 +357,7 @@ app.frame('/frame-setup-contract/:network/:page', async (c: FrameContext) => {
       )
     )
   ).flat();
-
-  const { buttonValue, inputText, status } = c;
+  console.log("contractAddresses: ", contractAddresses);
 
   const prevBtn = (index: number) => {
     if (contractAddresses.length > 0 && index > 0) {
@@ -452,21 +448,18 @@ app.frame('/frame-setup-contract/:network/:page', async (c: FrameContext) => {
   })
 });
 
-app.frame('/frame-purchase/:checkoutId', (c: FrameContext) => {
-  const checkoutId = c.req.param('checkoutId');
+app.frame('/frame-purchase/:checkoutId', (c) => {
+  const { buttonValue, inputText, status, req } = c;
+  const checkoutId = req.param('checkoutId');
   const checkoutUrl = `https://app.unlock-protocol.com/checkout?id=${checkoutId}`;
   console.log("checkoutId: ", checkoutUrl);
-  const { buttonValue, inputText, status } = c;
-  const fruit = inputText || buttonValue
+
   return c.res({
     image: (
       <div
         style={{
           alignItems: 'center',
-          background:
-            status === 'response'
-              ? 'linear-gradient(to right, #432889, #17101F)'
-              : 'black',
+          background: 'black',
           backgroundSize: '100% 100%',
           display: 'flex',
           flexDirection: 'column',
@@ -489,29 +482,17 @@ app.frame('/frame-purchase/:checkoutId', (c: FrameContext) => {
             whiteSpace: 'pre-wrap',
           }}
         >
-          {status === 'response'
-            ? `Nice choice.${checkoutUrl} ${fruit ? ` ${fruit.toUpperCase()}!!` : ''}`
-            : `Welcome! ${checkoutUrl}`}
+          {
+            `Welcome! ${checkoutUrl}`
+          }
         </div>
       </div>
     ),
     intents: [
-      <TextInput placeholder="Enter custom fruit..." />,
-      <Button.Link href={checkoutUrl}>Mint</Button.Link>,
-      status === 'response' && <Button.Reset>Reset</Button.Reset>,
+      <Button.Link href={checkoutUrl}>Mint</Button.Link>
     ],
   })
 })
-
-const getDistinctAddresses = async (fid: string): Promise<Address[]> => {
-  let fetchedUsers: any = await neynarClient.fetchBulkUsers([Number(fid)]);
-  const ethAddresses: (string | undefined)[] | undefined = fetchedUsers.users[0]?.verified_addresses?.eth_addresses;
-  return Array.from(new Set(
-    (ethAddresses || [])
-      .filter(address => typeof address === 'string' && address.startsWith('0x'))
-      .map(address => address as Address)
-  ));
-};
 
 devtools(app, { serveStatic })
 
@@ -521,6 +502,16 @@ export const POST = handle(app)
 
 //_______________________________________________________________________________________________________________________
 // Utils
+
+const getDistinctAddresses = async (fid: string): Promise<Address[]> => {
+  let fetchedUsers: any = await neynarClient.fetchBulkUsers([Number(fid)]);
+  const ethAddresses: string[] = fetchedUsers.users[0]?.verified_addresses?.eth_addresses;
+  return Array.from(new Set(
+    (ethAddresses || [])
+      .filter(address => typeof address === 'string' && address.startsWith('0x'))
+      .map(address => address as Address)
+  ));
+};
 
 function isSetupCast(castText: string): boolean {
   // Pending to verify if I need to validate if parent cast is a setup cast too
@@ -562,14 +553,9 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
       },
     });
     const txWithProxyData = await txWithProxy.json();
-    const txDetails: [{ blockNum: string, hash: string }] = txWithProxyData.result.transfers.map((tx: any) => {
-      return {
-        blockNum: tx.blockNum,
-        hash: tx.hash,
-      }
-    });
+    const txHashes: string[] = txWithProxyData.result.transfers.map((tx: any) => tx.hash);
     const allReceiptPromises = await Promise.all(
-      txDetails.map(async (txDetail: { blockNum: string, hash: string }) => {
+      txHashes.map(async (txHash: string) => {
         const response = await fetch(RPC, {
           method: "POST",
           headers: {
@@ -577,16 +563,16 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
           },
           body: JSON.stringify({
             jsonrpc: "2.0",
-            method: "alchemy_getTransactionReceipts",
-            params: [{ blockNumber: txDetail.blockNum }],
+            method: "eth_getTransactionReceipt",
+            params: [txHash],
           }),
           next: {
-            revalidate: 600, // Cache for 10 minutes (adjust as needed)
+            revalidate: 600,
           },
         });
 
         if (!response.ok) {
-          throw new Error(`Request for block ${txDetail.blockNum} failed`);
+          throw new Error(`Request for block ${txHash} failed`);
         }
 
         const data = await response.json();
@@ -594,17 +580,14 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
       })
     );
     const allReceipts = await Promise.all(allReceiptPromises);
-    const contractAddresses = allReceipts.flatMap((receiptList) => {
-      const receipts = receiptList.receipts || [];
-      return receipts.flatMap((receipt: any) => { // Flatmap each receipt's logs
-        if (receipt.logs && receipt.logs.length > 0) {
-          const firstLog = receipt.logs[0]; // There could be logs that have a different address, but I'm assuming the first one is the contract address
-          const matchingTxDetail = txDetails.find(txDetail => txDetail.hash === receipt.transactionHash);
-          return matchingTxDetail ? firstLog.address : [];
-        } else {
-          return [];
-        }
-      });
+    // console.log("allReceipts: ", allReceipts);
+    const contractAddresses = allReceipts.flatMap((receipt) => {
+      if (receipt.logs && receipt.logs.length > 0) {
+        const firstLog = receipt.logs[0]; // There could be logs that have a different address, but I'm assuming the first one is the contract address
+        return firstLog.address;
+      } else {
+        return [];
+      }
     });
     return contractAddresses;
   } catch (error) {
