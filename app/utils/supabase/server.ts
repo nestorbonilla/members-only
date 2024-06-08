@@ -1,8 +1,8 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-export function createClient() {
-  const cookieStore = cookies()
+const createClient = () => {
+  const cookieStore = cookies();
 
   return createServerClient(
     process.env.SUPABASE_URL!,
@@ -34,3 +34,42 @@ export function createClient() {
     }
   )
 }
+
+export const getChannelRules = async (channelId: string, limit: number = 3) => {
+  const client = createClient(); // Create the Supabase client
+  const { data, error } = await client
+    .from('channel_access_rules')
+    .select('*')
+    .eq('channel_id', channelId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error('Error fetching channel access rules:', error);
+    throw error; // Rethrow the error for handling in the API route
+  }
+  return data;
+}
+
+export const insertChannelRule = async (
+  channelId: string,
+  network: string,
+  contractAddress: string,
+  operator: string,
+  ruleBehavior: string
+) => {
+  const client = createClient();
+
+  const { error } = await client
+    .from('channel_access_rules')
+    .insert([
+      {
+        channel_id: channelId,
+        operator: operator,
+        rule_behavior: ruleBehavior,
+        network: network,
+        contract_address: contractAddress,
+      },
+    ]);
+
+  return error;
+};

@@ -9,7 +9,7 @@ import neynarClient from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
 import { Address } from 'viem';
 import { hasMembership, getLockMetadata, getUnlockProxyAddress } from '@/app/utils/unlock/membership';
-import { createClient } from '@/app/utils/supabase/server';
+import { getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getAlchemyRpc } from '@/app/utils/alchemy/constants';
 import { getMembersOnlyReferralFee } from '@/app/utils/viem/constants';
 
@@ -95,7 +95,6 @@ app.hono.post("/hook-validate", async (c) => {
       let castHash = body.data.hash;
       console.log("fid: ", fid);
       const userAddresses = await getDistinctAddresses(fid.toString());
-      const supabase = createClient();
       // let validMembership = await hasMembership(userAddresses[0]);
       let validMembership = true;
 
@@ -145,15 +144,9 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
   let conditions = 0;
 
   // Get the channel access rules
-  const supabaseClient = createClient();
-  const { data, error } = await supabaseClient
-    .from('channel_access_rules')
-    .select('*')
-    .eq('channel_id', channelId)
-    .order('created_at', { ascending: false })
-    .limit(ACCESS_RULES_LIMIT);
-  if (data?.length! > 0) {
-    conditions = data!.length;
+  let channelRules = await getChannelRules(channelId, ACCESS_RULES_LIMIT);
+  if (channelRules?.length! > 0) {
+    conditions = channelRules!.length;
     console.log("conditions: ", conditions);
     if (conditions >= ACCESS_RULES_LIMIT) {
       dynamicIntents = [
@@ -277,15 +270,9 @@ app.frame('/frame-setup-channel-action/:channelId/:action', async (c) => {
     console.log("call end: frame-channel-action/:channelId/:action");
     let conditions = 0;
     // Get the channel access rules
-    const supabaseClient = createClient();
-    const { data, error } = await supabaseClient
-      .from('channel_access_rules')
-      .select('*')
-      .eq('channel_id', channelId)
-      .order('created_at', { ascending: false })
-      .limit(ACCESS_RULES_LIMIT);
-    if (data?.length! > 0) {
-      conditions = data!.length;
+    let channelRules = await getChannelRules(channelId, ACCESS_RULES_LIMIT);
+    if (channelRules?.length! > 0) {
+      conditions = channelRules!.length;
     }
     console.log("call end: frame-channel/:channelId");
     return c.res({
@@ -387,18 +374,8 @@ app.frame('/frame-setup-contract/:network/:page', async (c) => {
   if (status == "response" && buttonValue == "done" && inputText) {
     console.log("inputText: ", inputText);
     // Get the channel access rules
-    const supabaseClient = createClient();
-    const { error: insertError } = await supabaseClient
-      .from('channel_access_rules')
-      .insert([
-        {
-          channel_id: channelId,
-          operator: "AND",
-          rule_behavior: "ALLOW",
-          network: network,
-          contract_address: inputText
-        },
-      ]);
+    let insertError = await insertChannelRule(channelId, network, inputText, "AND", "ALLOW");
+
     if (insertError) {
       console.log("error: ", insertError);
       textFrame = `Error adding the rule.`;
