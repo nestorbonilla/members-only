@@ -8,7 +8,7 @@ import { serveStatic } from 'frog/serve-static';
 import neynarClient from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
 import { Address } from 'viem';
-import { hasMembership } from '@/app/utils/unlock/membership';
+import { hasMembership, getLockMetadata, getUnlockProxyAddress } from '@/app/utils/unlock/membership';
 import { createClient } from '@/app/utils/supabase/server';
 const { Network } = require('alchemy-sdk');
 
@@ -17,7 +17,6 @@ const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 const BOT_SETUP_TEXT = process.env.BOT_SETUP_TEXT; // edit to @membersonly setup
 const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
 const ACCESS_RULES_LIMIT = 3;
-const UNLOCK_PROXY = "0xd0b14797b9d08493392865647384974470202a78"; // need to better way if multiple chains or different proxies
 
 const app = new Frog({
   assetsPath: '/',
@@ -348,7 +347,7 @@ app.frame('/frame-setup-contract/:network/:page', async (c) => {
   // const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
   // console.log("frameActionResponse: ", frameActionResponse);
 
-  // pending to get eth addresses from account
+  // pending to get eth addresses from app.frame() payload
   let ethAddresses = ["0xe8f5533ba4c562b2162e8cf9b769a69cd28e811d"];
   const contractAddresses: string[] = (
     await Promise.all(
@@ -358,6 +357,11 @@ app.frame('/frame-setup-contract/:network/:page', async (c) => {
     )
   ).flat();
   console.log("contractAddresses: ", contractAddresses);
+  // this is failing with 'could not detect network'
+  // let getLockMetadataPromises = contractAddresses.map(async (contractAddress) => {
+  //   return await getLockMetadata(contractAddress, network);
+  // });
+  // let lockMetadata = await Promise.all(getLockMetadataPromises);
 
   const prevBtn = (index: number) => {
     if (contractAddresses.length > 0 && index > 0) {
@@ -483,7 +487,7 @@ app.frame('/frame-purchase/:checkoutId', (c) => {
           }}
         >
           {
-            `Welcome! ${checkoutUrl}`
+            `Checkout by pressing the mint button!`
           }
         </div>
       </div>
@@ -525,9 +529,10 @@ function getLastPartOfUrl(url: string) {
 }
 
 const getContractsDeployed = async (address: string, network: string): Promise<string[]> => {
-  let RPC = getRpc(network);
+  let rpc = getRpc(network);
+  console.log("rpc: ", rpc);
   try {
-    const txWithProxy = await fetch(RPC, {
+    const txWithProxy = await fetch(rpc, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -540,7 +545,7 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
             fromBlock: "0x0",
             toBlock: "latest",
             fromAddress: address,
-            toAddress: UNLOCK_PROXY,
+            toAddress: getUnlockProxyAddress(network),
             category: ["external"],
             order: "desc",
             withMetadata: true,
@@ -556,7 +561,7 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
     const txHashes: string[] = txWithProxyData.result.transfers.map((tx: any) => tx.hash);
     const allReceiptPromises = await Promise.all(
       txHashes.map(async (txHash: string) => {
-        const response = await fetch(RPC, {
+        const response = await fetch(rpc, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -572,7 +577,7 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
         });
 
         if (!response.ok) {
-          throw new Error(`Request for block ${txHash} failed`);
+          throw new Error(`Request for hash ${txHash} failed`);
         }
 
         const data = await response.json();
@@ -596,17 +601,17 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
   }
 }
 
-function getRpc(networkName: string): string {
-  switch (networkName) {
-    case "base":
-      return `${process.env.ALCHEMY_URL_BASE}${ALCHEMY_API_KEY}`;
-    case "optimism":
-      return Network.OPTIMISM_MAINNET;
+const getRpc = (network: string): string => {
+  switch (network) {
     case "ethereum":
-      return Network.ETHEREUM_MAINNET;
-    case "arbitrum":
-      return Network.ARBITRUM_MAINNET;
+      return `${process.env.ALCHEMY_RPC_URL_MAINNET}${ALCHEMY_API_KEY}`;
+    case 'base':
+      return `${process.env.ALCHEMY_RPC_URL_BASE}${ALCHEMY_API_KEY}`;
+    case 'optimism':
+      return `${process.env.ALCHEMY_RPC_URL_OPTIMISM}${ALCHEMY_API_KEY}`;
+    case 'arbitrum':
+      return `${process.env.ALCHEMY_RPC_URL_ARBITRUM}${ALCHEMY_API_KEY}`;
     default:
-      throw new Error(`Unsupported network: ${networkName}`);
+      throw new Error(`Unsupported network: ${network}`);
   }
 }
