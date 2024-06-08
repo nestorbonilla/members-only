@@ -339,16 +339,18 @@ app.frame('/frame-setup-contract/:network/:page', async (c) => {
   let currentPage = parseInt(page!);
   // console.log("chain and page: ", network, page);
   let textFrame = "";
-  let channelId = "unlock";
-
+  let channelId = "";
+  let ethAddresses: string[] = [];
 
   // console.log("messageBytes: ", payload.trustedData.messageBytes);
-  // // Validate the frame action response
-  // const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-  // console.log("frameActionResponse: ", frameActionResponse);
-
-  // pending to get eth addresses from app.frame() payload
-  let ethAddresses = ["0xe8f5533ba4c562b2162e8cf9b769a69cd28e811d"];
+  // Validate the frame action response and obtain ethAddresses and channelId
+  const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+  console.log("frameActionResponse: ", frameActionResponse);
+  if (frameActionResponse.valid) {
+    ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
+    let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([frameActionResponse.action.cast.root_parent_url!], { type: ChannelType.ParentUrl })).channels;
+    channelId = (channels && channels.length > 0) ? channels[0].id : "";
+  }
   const contractAddresses: string[] = (
     await Promise.all(
       ethAddresses.map(async (ethAddress) =>
