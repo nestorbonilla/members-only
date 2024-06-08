@@ -10,12 +10,11 @@ import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse }
 import { Address } from 'viem';
 import { hasMembership, getLockMetadata, getUnlockProxyAddress } from '@/app/utils/unlock/membership';
 import { createClient } from '@/app/utils/supabase/server';
-const { Network } = require('alchemy-sdk');
+import { getAlchemyRpc } from '@/app/utils/alchemy/constants';
 
 const APP_URL = process.env.APP_URL;
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
-const BOT_SETUP_TEXT = process.env.BOT_SETUP_TEXT; // edit to @membersonly setup
-const ALCHEMY_API_KEY = process.env.ALCHEMY_API_KEY;
+const BOT_SETUP_TEXT = process.env.BOT_SETUP_TEXT; // @membersonly setup
 const ACCESS_RULES_LIMIT = 3;
 
 const app = new Frog({
@@ -531,10 +530,10 @@ function getLastPartOfUrl(url: string) {
 }
 
 const getContractsDeployed = async (address: string, network: string): Promise<string[]> => {
-  let rpc = getRpc(network);
-  console.log("rpc: ", rpc);
+  let alchemyRpc = getAlchemyRpc(network);
+  console.log("rpc: ", alchemyRpc);
   try {
-    const txWithProxy = await fetch(rpc, {
+    const txWithProxy = await fetch(alchemyRpc, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -563,7 +562,7 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
     const txHashes: string[] = txWithProxyData.result.transfers.map((tx: any) => tx.hash);
     const allReceiptPromises = await Promise.all(
       txHashes.map(async (txHash: string) => {
-        const response = await fetch(rpc, {
+        const response = await fetch(alchemyRpc, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -600,20 +599,5 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
   } catch (error) {
     console.error("Error in getContractsDeployed requests:", error);
     return [];
-  }
-}
-
-const getRpc = (network: string): string => {
-  switch (network) {
-    case "ethereum":
-      return `${process.env.ALCHEMY_RPC_URL_MAINNET}${ALCHEMY_API_KEY}`;
-    case 'base':
-      return `${process.env.ALCHEMY_RPC_URL_BASE}${ALCHEMY_API_KEY}`;
-    case 'optimism':
-      return `${process.env.ALCHEMY_RPC_URL_OPTIMISM}${ALCHEMY_API_KEY}`;
-    case 'arbitrum':
-      return `${process.env.ALCHEMY_RPC_URL_ARBITRUM}${ALCHEMY_API_KEY}`;
-    default:
-      throw new Error(`Unsupported network: ${network}`);
   }
 }
