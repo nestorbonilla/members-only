@@ -77,17 +77,42 @@ export const getUnlockProxyAddress = (network: string) => {
   }
 };
 
-export async function hasMembership(userAddress: string, network: string) {
+export const hasMembership = async (lockAddress: string, userAddress: string, network: string) => {
   if (await web3Service.getHasValidKey(
-    getUnlockProxyAddress(network),
+    lockAddress,
     userAddress,
     getNetworkNumber(network)
   )) {
     return true;
-  } else {
+  }
+  return false;
+}
+
+export const getValidMembershipWithinRules = async (
+  channelRules: {
+    id: number,
+    channel_id: string,
+    operator: string,
+    rule_behavior: string,
+    network: string,
+    contract_address: string,
+    created_at: string,
+    updated_at: string | null
+  }[],
+  userAddresses: string[]
+) => {
+  const membershipPromises = userAddresses.flatMap(userAddress =>
+    channelRules.map(rule => hasMembership(rule.contract_address, userAddress, rule.network))
+  );
+
+  try {
+    await Promise.any(membershipPromises); // Wait for at least ONE to resolve
+    return true; // At least one membership is valid
+  } catch (error) {
+    // If ALL promises are rejected (no valid membership found)
     return false;
   }
-}
+};
 
 export async function fetchJson<JSON = unknown>(
   input: RequestInfo,

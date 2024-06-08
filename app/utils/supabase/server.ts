@@ -35,14 +35,14 @@ const createClient = () => {
   )
 }
 
-export const getChannelRules = async (channelId: string, limit: number = 3) => {
+export const getChannelRules = async (channelId: string) => {
   const client = createClient(); // Create the Supabase client
   const { data, error } = await client
     .from('channel_access_rules')
     .select('*')
     .eq('channel_id', channelId)
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(parseInt(process.env.ACCESS_RULES_LIMIT!));
   if (error) {
     console.error('Error fetching channel access rules:', error);
     throw error; // Rethrow the error for handling in the API route

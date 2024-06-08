@@ -8,7 +8,7 @@ import { serveStatic } from 'frog/serve-static';
 import neynarClient from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
 import { Address } from 'viem';
-import { hasMembership, getLockMetadata, getUnlockProxyAddress } from '@/app/utils/unlock/membership';
+import { hasMembership, getLockMetadata, getUnlockProxyAddress, getValidMembershipWithinRules } from '@/app/utils/unlock/membership';
 import { getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getAlchemyRpc } from '@/app/utils/alchemy/constants';
 import { getMembersOnlyReferralFee } from '@/app/utils/viem/constants';
@@ -23,7 +23,7 @@ const app = new Frog({
   basePath: '/api',
   hub: neynar({ apiKey: NEYNAR_API_KEY! }),
   verify: process.env.NODE_ENV === 'production' // leave it as is, if not issue with frog local debug tool
-})
+});
 
 // Uncomment to use Edge Runtime
 // export const runtime = 'edge'
@@ -34,15 +34,13 @@ app.hono.post("/hook-setup", async (c) => {
 
     const body = await c.req.json();
     let cast: Cast = body.data;
-    console.log("cast: ", cast);
+    console.log("cast text: ", cast.text);
 
     // 1. Validate the cast author is the owner of the channel
     // 1.1 Get the channel owner
-    console.log("call start: hook-setup => fetchBulkChannels");
-    let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([cast.parent_url!], { type: ChannelType.ParentUrl })).channels;
-    !channels || channels.length == 0 ? c.json({ message: `Channel not found with parent_url ${cast.parent_url}` }, 404) : null;
-    let channelId = channels[0].id;
-    let channelLead = channels[0].lead?.fid;
+    let channel = await getChannel(cast.root_parent_url!);
+    let channelId = channel?.id;
+    let channelLead = channel?.lead?.fid;
 
     // 1.2 Get the cast author
     let castAuthor = cast.author.fid;
@@ -51,9 +49,9 @@ app.hono.post("/hook-setup", async (c) => {
     // Probably second validation will be removed and just validated on the hook
     let castText = cast.text;
 
-    console.log("call start: hook-setup => castAuthor == castText");
+    // console.log("call start: hook-setup => castAuthor == castText");
     if (channelLead == castAuthor && castText == BOT_SETUP_TEXT) {
-      console.log("frame url: ", `${APP_URL}/api/frame-setup-channel/${channelId}`);
+      console.log("url to embed on reply cast: ", `${APP_URL}/api/frame-setup-channel/${channelId}`);
       const castResponse = await neynarClient.publishCast(
         process.env.SIGNER_UUID!,
         "",
@@ -69,15 +67,16 @@ app.hono.post("/hook-setup", async (c) => {
         console.log("call end: hook-setup");
         return c.json({ message: 'Cast sent.' }, 200);
       } else {
-        return c.json({ message: 'Error casting message.' }, 500);
+        return c.json({ message: 'Error casting message.' }, 200);
       }
 
     } else {
-      return c.json({ message: "You are not the owner of this channel." }, 403);
+      console.log("call end: hook-setup");
+      return c.json({ message: "You are not the owner of this channel." }, 200);
     }
   } catch (e) {
     console.error("Error:", e);
-    return c.json({ message: "Error processing request." }, 500);
+    return c.json({ message: "Error processing request." }, 200);
   }
 
 });
@@ -93,10 +92,12 @@ app.hono.post("/hook-validate", async (c) => {
       let fid = cast.author.fid;
       let username = body.data.author.username;
       let castHash = body.data.hash;
-      console.log("fid: ", fid);
-      const userAddresses = await getDistinctAddresses(fid.toString());
-      // let validMembership = await hasMembership(userAddresses[0]);
-      let validMembership = true;
+      // console.log("channelRules: ", channelRules);
+      let channel = await getChannel(cast.root_parent_url!);
+      let channelRules = await getChannelRules(channel?.id!);
+      const userAddresses = cast.author.verified_addresses.eth_addresses;
+      let validMembership = await getValidMembershipWithinRules(channelRules, userAddresses);
+      // let validMembership = true;
 
       if (validMembership) {
         let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash);
@@ -144,7 +145,7 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
   let conditions = 0;
 
   // Get the channel access rules
-  let channelRules = await getChannelRules(channelId, ACCESS_RULES_LIMIT);
+  let channelRules = await getChannelRules(channelId);
   if (channelRules?.length! > 0) {
     conditions = channelRules!.length;
     console.log("conditions: ", conditions);
@@ -270,7 +271,7 @@ app.frame('/frame-setup-channel-action/:channelId/:action', async (c) => {
     console.log("call end: frame-channel-action/:channelId/:action");
     let conditions = 0;
     // Get the channel access rules
-    let channelRules = await getChannelRules(channelId, ACCESS_RULES_LIMIT);
+    let channelRules = await getChannelRules(channelId);
     if (channelRules?.length! > 0) {
       conditions = channelRules!.length;
     }
@@ -335,8 +336,8 @@ app.frame('/frame-setup-contract/:network/:page', async (c) => {
   console.log("frameActionResponse: ", frameActionResponse);
   if (frameActionResponse.valid) {
     ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
-    let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([frameActionResponse.action.cast.root_parent_url!], { type: ChannelType.ParentUrl })).channels;
-    channelId = (channels && channels.length > 0) ? channels[0].id : "";
+    let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
+    channelId = channel?.id!;
   }
   const contractAddresses: string[] = (
     await Promise.all(
@@ -505,7 +506,7 @@ const getDistinctAddresses = async (fid: string): Promise<Address[]> => {
 };
 
 function isSetupCast(castText: string): boolean {
-  // Pending to verify if I need to validate if parent cast is a setup cast too
+  // Conditional text has been set in the hook, but it's also validated here
   return castText.trim().toLowerCase() === BOT_SETUP_TEXT!.toLowerCase(); // Case-insensitive check
 }
 
@@ -585,5 +586,14 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
   } catch (error) {
     console.error("Error in getContractsDeployed requests:", error);
     return [];
+  }
+}
+
+const getChannel = async (rootParentUrl: string): Promise<Channel | null> => {
+  let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([rootParentUrl], { type: ChannelType.ParentUrl })).channels;
+  if (channels && channels.length > 0) {
+    return channels[0];
+  } else {
+    return null;
   }
 }
