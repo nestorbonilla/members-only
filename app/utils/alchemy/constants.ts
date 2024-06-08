@@ -1,4 +1,3 @@
-const { Network } = require('alchemy-sdk');
 
 export const getAlchemyRpc = (network: string): string => {
   switch (network) {
