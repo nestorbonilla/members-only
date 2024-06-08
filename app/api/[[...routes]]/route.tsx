@@ -11,6 +11,7 @@ import { Address } from 'viem';
 import { hasMembership, getLockMetadata, getUnlockProxyAddress } from '@/app/utils/unlock/membership';
 import { createClient } from '@/app/utils/supabase/server';
 import { getAlchemyRpc } from '@/app/utils/alchemy/constants';
+import { getMembersOnlyReferralFee } from '@/app/utils/viem/constants';
 
 const APP_URL = process.env.APP_URL;
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
@@ -358,6 +359,14 @@ app.frame('/frame-setup-contract/:network/:page', async (c) => {
     )
   ).flat();
   console.log("contractAddresses: ", contractAddresses);
+
+  // we've got the contract addresses, now we need to get if referral is set
+  let referralFee = await getMembersOnlyReferralFee(contractAddresses[currentPage]);
+  console.log("referralFee: ", referralFee);
+  if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
+    // do aditional logic here
+  }
+
   // this is failing with 'could not detect network'
   // let getLockMetadataPromises = contractAddresses.map(async (contractAddress) => {
   //   return await getLockMetadata(contractAddress, network);

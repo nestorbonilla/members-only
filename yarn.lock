@@ -1412,6 +1412,11 @@
     "@uniswap/v3-core" "1.0.0"
     "@uniswap/v3-periphery" "^1.0.1"
 
+"@unlock-protocol/contracts@^0.0.27":
+  version "0.0.27"
+  resolved "https://registry.yarnpkg.com/@unlock-protocol/contracts/-/contracts-0.0.27.tgz#3101bcf2bac38916848e803c345da42adcb1f988"
+  integrity sha512-mbaHV8NqC/67jVKNa/bPtPs7vq5pF9+oSKyi6cAvfQ5FH7h55UxQgrC4yBLEx/UCR6PBuEl55BZYl3cyMIjjHg==
+
 "@unlock-protocol/networks@^0.0.23":
   version "0.0.23"
   resolved "https://registry.yarnpkg.com/@unlock-protocol/networks/-/networks-0.0.23.tgz#023c9a1b2443ade1e89a6c023d2e1919df27d1c6"

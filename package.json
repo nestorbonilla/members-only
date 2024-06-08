@@ -13,6 +13,7 @@
     "@neynar/nodejs-sdk": "^1.28.0",
     "@supabase/ssr": "^0.3.0",
     "@supabase/supabase-js": "^2.43.4",
+    "@unlock-protocol/contracts": "^0.0.27",
     "@unlock-protocol/networks": "^0.0.23",
     "@unlock-protocol/unlock-js": "^0.46.1",
     "ethers": "^5.6.5",
