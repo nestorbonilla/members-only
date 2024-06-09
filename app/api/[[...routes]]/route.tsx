@@ -21,7 +21,11 @@ const ACCESS_RULES_LIMIT = 3;
 const app = new Frog({
   assetsPath: '/',
   basePath: '/api',
+  origin: process.env.APP_URL,
   hub: neynar({ apiKey: NEYNAR_API_KEY! }),
+  imageOptions: {
+    format: "svg",
+  },
   verify: process.env.NODE_ENV === 'production' // leave it as is, if not issue with frog local debug tool
 });
 
@@ -145,7 +149,7 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
   let conditions = 0;
 
   // Get the channel access rules
-  let channelRules = await getChannelRules(channelId);
+  let channelRules = await getChannelRules(channelId!);
   if (channelRules?.length! > 0) {
     conditions = channelRules!.length;
     console.log("conditions: ", conditions);
@@ -167,6 +171,9 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
 
   console.log("call end: frame-setup-channel/:channelId");
   return c.res({
+    headers: {
+      'Content-Type': 'image/svg+xml',
+    },
     image: (
       <div
         style={{
@@ -200,6 +207,9 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
         </div>
       </div>
     ),
+    imageOptions: {
+      format: "svg",
+    },
     intents: dynamicIntents,
   })
 });
