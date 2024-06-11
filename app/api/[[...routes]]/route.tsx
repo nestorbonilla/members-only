@@ -151,6 +151,20 @@ app.frame('/', (c) => {
   })
 });
 
+app.frame('/with-async', async (c) => {
+  console.log("call start: /");
+  const channelId = 'unlock';
+  console.log("call end: /");
+  return c.res({
+    image: (
+      <div style={{ color: 'white', display: 'flex', fontSize: 60 }}>
+        Hey
+      </div>
+    ),
+    intents: [],
+  })
+});
+
 app.frame('/frame-setup-channel/:channelId', async (c) => {
   console.log("call start: frame-setup-channel/:channelId");
   const { req } = c;
