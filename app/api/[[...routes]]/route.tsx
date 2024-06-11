@@ -174,6 +174,42 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
     headers: {
       'Content-Type': 'image/svg+xml',
     },
+    // image: (
+    //   <div
+    //     style={{
+    //       alignItems: 'center',
+    //       background: 'black',
+    //       backgroundSize: '100% 100%',
+    //       display: 'flex',
+    //       flexDirection: 'column',
+    //       flexWrap: 'nowrap',
+    //       height: '100%',
+    //       justifyContent: 'center',
+    //       textAlign: 'center',
+    //       width: '100%',
+    //     }}
+    //   >
+    //     <div
+    //       style={{
+    //         color: 'white',
+    //         fontSize: 60,
+    //         fontStyle: 'normal',
+    //         letterSpacing: '-0.025em',
+    //         lineHeight: 1.4,
+    //         marginTop: 30,
+    //         padding: '0 120px',
+    //         whiteSpace: 'pre-wrap',
+    //         display: 'flex',
+    //       }}
+
+    //     >
+    //       {channelId} channel has {conditions == 0 ? "no" : conditions} rules
+    //     </div>
+    //   </div>
+    // ),
+    // imageOptions: {
+    //   format: "svg",
+    // },
     image: (
       <div
         style={{
@@ -185,31 +221,12 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
           flexWrap: 'nowrap',
           height: '100%',
           justifyContent: 'center',
-          textAlign: 'center',
-          width: '100%',
+          textAlign: 'center'
         }}
       >
-        <div
-          style={{
-            color: 'white',
-            fontSize: 60,
-            fontStyle: 'normal',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.4,
-            marginTop: 30,
-            padding: '0 120px',
-            whiteSpace: 'pre-wrap',
-            display: 'flex',
-          }}
-
-        >
-          {channelId} channel has {conditions == 0 ? "no" : conditions} rules
-        </div>
+        Hi {channelId}
       </div>
     ),
-    imageOptions: {
-      format: "svg",
-    },
     intents: dynamicIntents,
   })
 });
@@ -496,12 +513,6 @@ app.frame('/frame-purchase/:checkoutId', (c) => {
   })
 })
 
-devtools(app, { serveStatic })
-
-export const GET = handle(app)
-export const POST = handle(app)
-
-
 //_______________________________________________________________________________________________________________________
 // Utils
 
@@ -607,3 +618,8 @@ const getChannel = async (rootParentUrl: string): Promise<Channel | null> => {
     return null;
   }
 }
+
+devtools(app, { serveStatic })
+
+export const GET = handle(app)
+export const POST = handle(app)
