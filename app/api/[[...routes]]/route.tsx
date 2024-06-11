@@ -137,32 +137,14 @@ app.hono.post("/hook-validate", async (c) => {
   }
 });
 
-app.frame('/', async (c) => {
+app.frame('/', (c) => {
   console.log("call start: /");
-  // const { req } = c;
-
   const channelId = 'unlock';
-
   console.log("call end: /");
   return c.res({
-    headers: {
-      'Content-Type': 'image/svg+xml',
-    },
     image: (
-      <div
-        style={{
-          alignItems: 'center',
-          background: 'black',
-          backgroundSize: '100% 100%',
-          display: 'flex',
-          flexDirection: 'column',
-          flexWrap: 'nowrap',
-          height: '100%',
-          justifyContent: 'center',
-          textAlign: 'center'
-        }}
-      >
-        Hi {channelId}
+      <div style={{ color: 'white', display: 'flex', fontSize: 60 }}>
+        Hey
       </div>
     ),
     intents: [],
