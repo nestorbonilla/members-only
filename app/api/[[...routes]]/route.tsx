@@ -144,7 +144,7 @@ app.frame('/', (c) => {
   return c.res({
     image: (
       <div style={{ color: 'white', display: 'flex', fontSize: 60 }}>
-        Hey
+        Hey simple
       </div>
     ),
     intents: [],
@@ -158,7 +158,23 @@ app.frame('/with-async', async (c) => {
   return c.res({
     image: (
       <div style={{ color: 'white', display: 'flex', fontSize: 60 }}>
-        Hey
+        Hey async
+      </div>
+    ),
+    intents: [],
+  })
+});
+
+app.frame('/with-async-param/:channelId', async (c) => {
+  console.log("call start: /");
+  const { req } = c;
+  const channelId = req.param('channelId');
+  console.log("channelId: ", channelId);
+  console.log("call end: /");
+  return c.res({
+    image: (
+      <div style={{ color: 'white', display: 'flex', fontSize: 60 }}>
+        Hey async with param {channelId}
       </div>
     ),
     intents: [],
