@@ -137,102 +137,6 @@ app.hono.post("/hook-validate", async (c) => {
   }
 });
 
-app.frame('/', (c) => {
-  console.log("call start: /");
-  const channelId = 'unlock';
-  console.log("call end: /");
-  return c.res({
-    image: (
-      <div style={{ color: 'white', display: 'flex', fontSize: 60 }}>
-        Hey simple
-      </div>
-    ),
-    intents: [],
-  })
-});
-
-app.frame('/with-async', async (c) => {
-  console.log("call start: /");
-  const channelId = 'unlock';
-  console.log("call end: /");
-  return c.res({
-    image: (
-      <div style={{ color: 'white', display: 'flex', fontSize: 60 }}>
-        Hey async
-      </div>
-    ),
-    intents: [],
-  })
-});
-
-app.frame('/with-async-param/:channelId', async (c) => {
-  console.log("call start: /");
-  const { req } = c;
-  const channelId = req.param('channelId');
-  console.log("channelId: ", channelId);
-  let dynamicIntents = [];
-  let nextFrame = "frame-setup-channel-action";
-  let prevFrame = "/";
-  let conditions = 0;
-
-  // Get the channel access rules
-  let channelRules = await getChannelRules(channelId!);
-  if (channelRules?.length! > 0) {
-    conditions = channelRules!.length;
-    console.log("conditions: ", conditions);
-    if (conditions >= ACCESS_RULES_LIMIT) {
-      dynamicIntents = [
-        <Button action={`/${nextFrame}/${channelId}/remove`}>Remove</Button>
-      ];
-    } else {
-      dynamicIntents = [
-        <Button action={`/${nextFrame}/${channelId}/add`}>Add</Button>,
-        <Button action={`/${nextFrame}/${channelId}/remove`}>Remove</Button>
-      ];
-    }
-  } else {
-    dynamicIntents = [
-      <Button action={`/${nextFrame}/${channelId}/add`}>Add</Button>
-    ];
-  }
-  console.log("call end: /");
-  return c.res({
-    image: (
-      <div
-        style={{
-          alignItems: 'center',
-          background: 'black',
-          backgroundSize: '100% 100%',
-          display: 'flex',
-          flexDirection: 'column',
-          flexWrap: 'nowrap',
-          height: '100%',
-          justifyContent: 'center',
-          textAlign: 'center',
-          width: '100%',
-        }}
-      >
-        <div
-          style={{
-            color: 'white',
-            fontSize: 60,
-            fontStyle: 'normal',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.4,
-            marginTop: 30,
-            padding: '0 120px',
-            whiteSpace: 'pre-wrap',
-            display: 'flex',
-          }}
-        >
-          {channelId} channel has {conditions == 0 ? "no" : conditions} rules
-        </div>
-      </div>
-    ),
-    intents: dynamicIntents,
-  })
-});
-
 app.frame('/frame-setup-channel/:channelId', async (c) => {
   console.log("call start: frame-setup-channel/:channelId");
   const { req } = c;
@@ -311,106 +215,57 @@ app.frame('/frame-setup-channel-action/:channelId/:action', async (c) => {
   let dynamicIntents = [];
   let nextFrame = "";
   let prevFrame = "frame-setup-channel";
+  let textFrame = "";
   let firstPage = 0;
 
   if (action == "add") {
     nextFrame = "frame-setup-contract";
-    dynamicIntents = [
-      <Button action={`/${nextFrame}/base/${firstPage}`}>Base</Button>,
-      <Button action={`/${nextFrame}/optimism/${firstPage}`}>Optimism</Button>,
-      <Button action={`/${nextFrame}/arbitrum/${firstPage}`}>Arbitrum</Button>,
-      <Button action={`/${nextFrame}/other/${firstPage}`}>Other</Button>,
-    ];
-    console.log("call end: frame-channel-action/:channelId/:action");
-    return c.res({
-      image: (
-        <div
-          style={{
-            alignItems: 'center',
-            background: 'black',
-            backgroundSize: '100% 100%',
-            display: 'flex',
-            flexDirection: 'column',
-            flexWrap: 'nowrap',
-            height: '100%',
-            justifyContent: 'center',
-            textAlign: 'center',
-            width: '100%',
-          }}
-        >
-          <div
-            style={{
-              color: 'white',
-              fontSize: 60,
-              fontStyle: 'normal',
-              letterSpacing: '-0.025em',
-              lineHeight: 1.4,
-              marginTop: 30,
-              padding: '0 120px',
-              whiteSpace: 'pre-wrap',
-              display: 'flex',
-            }}
-
-          >
-            To add a rule on channel {channelId}, start by selecting the network the contract is deployed on.
-          </div>
-        </div>
-      ),
-      intents: dynamicIntents,
-    })
-  } else //if (action == "remove")
-  {
+    textFrame = `To add a rule on channel ${channelId}, start by selecting the network the contract is deployed on.`;
+  } else if (action == "remove") {
     nextFrame = "frame-setup-remove";
-    dynamicIntents = [
-      <Button action={`/${nextFrame}/base/${firstPage}`}>Prev</Button>,
-      <Button action={`/${nextFrame}/optimism/${firstPage}`}>Next</Button>,
-      <Button action={`/${nextFrame}/arbitrum/${firstPage}`}>Confirm</Button>
-    ];
-    console.log("call end: frame-channel-action/:channelId/:action");
-    let conditions = 0;
-    // Get the channel access rules
-    let channelRules = await getChannelRules(channelId);
-    if (channelRules?.length! > 0) {
-      conditions = channelRules!.length;
-    }
-    console.log("call end: frame-channel/:channelId");
-    return c.res({
-      image: (
+    textFrame = `Is this the rule you want to remove from channel ${channelId}?`;
+  }
+  dynamicIntents = [
+    <Button action={`/${nextFrame}/base/${firstPage}`}>Prev</Button>,
+    <Button action={`/${nextFrame}/optimism/${firstPage}`}>Next</Button>,
+    <Button action={`/${nextFrame}/arbitrum/${firstPage}`}>Confirm</Button>
+  ];
+  console.log("call end: frame-channel/:channelId");
+  return c.res({
+    image: (
+      <div
+        style={{
+          alignItems: 'center',
+          background: 'black',
+          backgroundSize: '100% 100%',
+          display: 'flex',
+          flexDirection: 'column',
+          flexWrap: 'nowrap',
+          height: '100%',
+          justifyContent: 'center',
+          textAlign: 'center',
+          width: '100%',
+        }}
+      >
         <div
           style={{
-            alignItems: 'center',
-            background: 'black',
-            backgroundSize: '100% 100%',
+            color: 'white',
+            fontSize: 60,
+            fontStyle: 'normal',
+            letterSpacing: '-0.025em',
+            lineHeight: 1.4,
+            marginTop: 30,
+            padding: '0 120px',
+            whiteSpace: 'pre-wrap',
             display: 'flex',
-            flexDirection: 'column',
-            flexWrap: 'nowrap',
-            height: '100%',
-            justifyContent: 'center',
-            textAlign: 'center',
-            width: '100%',
           }}
         >
-          <div
-            style={{
-              color: 'white',
-              fontSize: 60,
-              fontStyle: 'normal',
-              letterSpacing: '-0.025em',
-              lineHeight: 1.4,
-              marginTop: 30,
-              padding: '0 120px',
-              whiteSpace: 'pre-wrap',
-              display: 'flex',
-            }}
-
-          >
-            Is this the rule you want to remove from channel {channelId}?
-          </div>
+          {textFrame}
         </div>
-      ),
-      intents: dynamicIntents,
-    })
-  }
+      </div>
+    ),
+    intents: dynamicIntents,
+  })
 });
 
 app.frame('/frame-setup-contract/:network/:page', async (c) => {
