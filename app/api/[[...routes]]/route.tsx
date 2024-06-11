@@ -170,6 +170,31 @@ app.frame('/with-async-param/:channelId', async (c) => {
   const { req } = c;
   const channelId = req.param('channelId');
   console.log("channelId: ", channelId);
+  let dynamicIntents = [];
+  let nextFrame = "frame-setup-channel-action";
+  let prevFrame = "/";
+  let conditions = 0;
+
+  // Get the channel access rules
+  let channelRules = await getChannelRules(channelId!);
+  if (channelRules?.length! > 0) {
+    conditions = channelRules!.length;
+    console.log("conditions: ", conditions);
+    if (conditions >= ACCESS_RULES_LIMIT) {
+      dynamicIntents = [
+        <Button action={`/${nextFrame}/${channelId}/remove`}>Remove</Button>
+      ];
+    } else {
+      dynamicIntents = [
+        <Button action={`/${nextFrame}/${channelId}/add`}>Add</Button>,
+        <Button action={`/${nextFrame}/${channelId}/remove`}>Remove</Button>
+      ];
+    }
+  } else {
+    dynamicIntents = [
+      <Button action={`/${nextFrame}/${channelId}/add`}>Add</Button>
+    ];
+  }
   console.log("call end: /");
   return c.res({
     image: (
@@ -268,7 +293,7 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
           textAlign: 'center'
         }}
       >
-        Hi {channelId}
+        Hi async {channelId} with {dynamicIntents.length} intents
       </div>
     ),
     intents: dynamicIntents,
