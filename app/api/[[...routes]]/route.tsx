@@ -137,6 +137,38 @@ app.hono.post("/hook-validate", async (c) => {
   }
 });
 
+app.frame('/', async (c) => {
+  console.log("call start: /");
+  // const { req } = c;
+
+  const channelId = 'unlock';
+
+  console.log("call end: /");
+  return c.res({
+    headers: {
+      'Content-Type': 'image/svg+xml',
+    },
+    image: (
+      <div
+        style={{
+          alignItems: 'center',
+          background: 'black',
+          backgroundSize: '100% 100%',
+          display: 'flex',
+          flexDirection: 'column',
+          flexWrap: 'nowrap',
+          height: '100%',
+          justifyContent: 'center',
+          textAlign: 'center'
+        }}
+      >
+        Hi {channelId}
+      </div>
+    ),
+    intents: [],
+  })
+});
+
 app.frame('/frame-setup-channel/:channelId', async (c) => {
   console.log("call start: frame-setup-channel/:channelId");
   const { req } = c;
