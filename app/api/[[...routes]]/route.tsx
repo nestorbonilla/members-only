@@ -199,10 +199,10 @@ app.frame('/with-async-param/:channelId', async (c) => {
   return c.res({
     image: (
       <div style={{ color: 'white', display: 'flex', fontSize: 60 }}>
-        Hey async with param {channelId}
+        Hey async with param {channelId} with {dynamicIntents.length} intents
       </div>
     ),
-    intents: [],
+    intents: dynamicIntents,
   })
 });
 
@@ -293,7 +293,7 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
           textAlign: 'center'
         }}
       >
-        Hi async {channelId} with {dynamicIntents.length} intents
+        Hi {channelId}
       </div>
     ),
     intents: dynamicIntents,
