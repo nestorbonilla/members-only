@@ -224,9 +224,8 @@ app.frame('/with-async-param/:channelId', async (c) => {
             whiteSpace: 'pre-wrap',
             display: 'flex',
           }}
-
         >
-          Hey async with param {channelId} with {dynamicIntents.length} intents
+          {channelId} channel has {conditions == 0 ? "no" : conditions} rules
         </div>
       </div>
     ),
