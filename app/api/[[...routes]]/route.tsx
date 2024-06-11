@@ -236,9 +236,8 @@ app.frame('/with-async-param/:channelId', async (c) => {
 app.frame('/frame-setup-channel/:channelId', async (c) => {
   console.log("call start: frame-setup-channel/:channelId");
   const { req } = c;
-
   const channelId = req.param('channelId');
-
+  console.log("channelId: ", channelId);
   let dynamicIntents = [];
   let nextFrame = "frame-setup-channel-action";
   let prevFrame = "/";
@@ -264,48 +263,8 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
       <Button action={`/${nextFrame}/${channelId}/add`}>Add</Button>
     ];
   }
-
   console.log("call end: frame-setup-channel/:channelId");
   return c.res({
-    headers: {
-      'Content-Type': 'image/svg+xml',
-    },
-    // image: (
-    //   <div
-    //     style={{
-    //       alignItems: 'center',
-    //       background: 'black',
-    //       backgroundSize: '100% 100%',
-    //       display: 'flex',
-    //       flexDirection: 'column',
-    //       flexWrap: 'nowrap',
-    //       height: '100%',
-    //       justifyContent: 'center',
-    //       textAlign: 'center',
-    //       width: '100%',
-    //     }}
-    //   >
-    //     <div
-    //       style={{
-    //         color: 'white',
-    //         fontSize: 60,
-    //         fontStyle: 'normal',
-    //         letterSpacing: '-0.025em',
-    //         lineHeight: 1.4,
-    //         marginTop: 30,
-    //         padding: '0 120px',
-    //         whiteSpace: 'pre-wrap',
-    //         display: 'flex',
-    //       }}
-
-    //     >
-    //       {channelId} channel has {conditions == 0 ? "no" : conditions} rules
-    //     </div>
-    //   </div>
-    // ),
-    // imageOptions: {
-    //   format: "svg",
-    // },
     image: (
       <div
         style={{
@@ -317,10 +276,25 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
           flexWrap: 'nowrap',
           height: '100%',
           justifyContent: 'center',
-          textAlign: 'center'
+          textAlign: 'center',
+          width: '100%',
         }}
       >
-        Hi {channelId}
+        <div
+          style={{
+            color: 'white',
+            fontSize: 60,
+            fontStyle: 'normal',
+            letterSpacing: '-0.025em',
+            lineHeight: 1.4,
+            marginTop: 30,
+            padding: '0 120px',
+            whiteSpace: 'pre-wrap',
+            display: 'flex',
+          }}
+        >
+          {channelId} channel has {conditions == 0 ? "no" : conditions} rules
+        </div>
       </div>
     ),
     intents: dynamicIntents,
@@ -329,8 +303,9 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
 
 app.frame('/frame-setup-channel-action/:channelId/:action', async (c) => {
   console.log("call start: frame-channel-action/:channelId/:action");
-  const channelId = c.req.param('channelId');
-  const action = c.req.param('action');
+  const { req } = c;
+  const channelId = req.param('channelId');
+  const action = req.param('action');
   console.log("channelId and action: ", channelId, action);
 
   let dynamicIntents = [];
