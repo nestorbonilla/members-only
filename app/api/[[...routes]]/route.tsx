@@ -139,31 +139,43 @@ app.hono.post("/hook-validate", async (c) => {
   }
 });
 
-app.frame('/frame-setup-channel/:channelId', async (c) => {
-  console.log("call start: frame-setup-channel/:channelId");
+app.frame('/frame-setup/:channelId', async (c) => {
+  console.log("call start: frame-setup/:channelId");
   const { buttonValue, inputText, status, req } = c;
-  const payload = await req.json();
+  // console.log("req: ", req);
+  let ethAddresses: string[] = [];
+  // try {
+  const body = await req.json();
+  let cast: Cast = body.data;
+  ethAddresses = cast.author.verified_addresses.eth_addresses;
+  //   console.log("ethAddresses: ", ethAddresses);
+  // } catch (error) {
+  //   console.log("error: ", error);
+  // }
+  // const payload = await req.json();
+
   let channelId = req.param('channelId');
-  console.log("channelId: ", channelId);
+  // console.log("channelId: ", channelId);
   let dynamicIntents: any[] = [];
   let textFrame = "";
   let conditions = 0;
-  let ethAddresses: string[] = [];
-  let interactorIsChannelLead = false;
+
+  let interactorIsChannelLead = true;
 
   // Validate the frame action response and obtain ethAddresses and channelId
-  const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-  console.log("frameActionResponse: ", frameActionResponse);
-  if (frameActionResponse.valid) {
-    ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
-    let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
-    let frameChannelId = channel?.id!;
-    let interactor = frameActionResponse.action.signer?.client?.fid;
-    let channelLead = channel?.lead?.fid;
-    if (channelLead == interactor) {
-      interactorIsChannelLead = true;
-    }
-  }
+  // const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+  // console.log("frameActionResponse: ", frameActionResponse);
+  // if (frameActionResponse.valid) {
+  //   ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
+  //   let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
+  //   let frameChannelId = channel?.id!;
+  //   let interactor = frameActionResponse.action.signer?.client?.fid;
+  //   let channelLead = channel?.lead?.fid;
+  //   if (channelLead == interactor) {
+  //     interactorIsChannelLead = true;
+  //   }
+  // }
+
   // ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
   // console.log("buttonValue: ", buttonValue);
 
@@ -175,6 +187,10 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
     if (status == "initial" || (status == "response" && buttonValue == "done")) {
       // Step 1: Show the number of rules on the channel
       console.log("step: initial");
+      let lockMetadata;
+      if (channelRules?.length! > 0) {
+        lockMetadata = getLockMetadata(channelRules![0].contract_address, channelRules![0].network);
+      }
       textFrame = `${channelId} channel has ${conditions == 0 ? "no" : conditions} rules`;
       if (channelRules?.length! == 0) {
         dynamicIntents = [
@@ -341,193 +357,193 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
   })
 });
 
-app.frame('/frame-setup-action/:channelId/:setupAction', async (c) => {
-  console.log("call start: frame-setup-action/:channelId/:setupAction");
-  const { req } = c;
-  console.log("req: ", req);
-  const channelId = req.param('channelId');
-  const action = req.param('setupAction');
-  console.log("channelId and action: ", channelId, action);
+// app.frame('/frame-setup-action/:channelId/:setupAction', async (c) => {
+//   console.log("call start: frame-setup-action/:channelId/:setupAction");
+//   const { req } = c;
+//   console.log("req: ", req);
+//   const channelId = req.param('channelId');
+//   const action = req.param('setupAction');
+//   console.log("channelId and action: ", channelId, action);
 
-  let dynamicIntents = [];
-  let nextFrame = "";
-  let textFrame = "";
-  let firstPage = 0;
+//   let dynamicIntents = [];
+//   let nextFrame = "";
+//   let textFrame = "";
+//   let firstPage = 0;
 
-  // if (action == "add") {
-  nextFrame = "frame-setup-contract";
-  textFrame = `To add a rule on channel ${channelId}, start by selecting the network the contract is deployed on.`;
-  // } else if (action == "remove") {
-  //   nextFrame = "frame-setup-remove";
-  //   textFrame = `Is this the rule you want to remove from channel ${channelId}?`;
-  // }
-  dynamicIntents = [
-    <Button action={`/${nextFrame}/base/${firstPage}`}>Prev</Button>,
-    <Button action={`/${nextFrame}/optimism/${firstPage}`}>Next</Button>,
-    <Button action={`/${nextFrame}/arbitrum/${firstPage}`}>Confirm</Button>
-  ];
-  console.log("call end: frame-setup-channel-action/:channelId/:action");
-  return c.res({
-    image: (
-      <div
-        style={{
-          alignItems: 'center',
-          background: 'black',
-          backgroundSize: '100% 100%',
-          display: 'flex',
-          flexDirection: 'column',
-          flexWrap: 'nowrap',
-          height: '100%',
-          justifyContent: 'center',
-          textAlign: 'center',
-          width: '100%',
-        }}
-      >
-        <div
-          style={{
-            color: 'white',
-            fontSize: 60,
-            fontStyle: 'normal',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.4,
-            marginTop: 30,
-            padding: '0 120px',
-            whiteSpace: 'pre-wrap',
-            display: 'flex',
-          }}
-        >
-          {textFrame}.
-        </div>
-      </div>
-    ),
-    intents: dynamicIntents,
-  })
-});
+//   // if (action == "add") {
+//   nextFrame = "frame-setup-contract";
+//   textFrame = `To add a rule on channel ${channelId}, start by selecting the network the contract is deployed on.`;
+//   // } else if (action == "remove") {
+//   //   nextFrame = "frame-setup-remove";
+//   //   textFrame = `Is this the rule you want to remove from channel ${channelId}?`;
+//   // }
+//   dynamicIntents = [
+//     <Button action={`/${nextFrame}/base/${firstPage}`}>Prev</Button>,
+//     <Button action={`/${nextFrame}/optimism/${firstPage}`}>Next</Button>,
+//     <Button action={`/${nextFrame}/arbitrum/${firstPage}`}>Confirm</Button>
+//   ];
+//   console.log("call end: frame-setup-channel-action/:channelId/:action");
+//   return c.res({
+//     image: (
+//       <div
+//         style={{
+//           alignItems: 'center',
+//           background: 'black',
+//           backgroundSize: '100% 100%',
+//           display: 'flex',
+//           flexDirection: 'column',
+//           flexWrap: 'nowrap',
+//           height: '100%',
+//           justifyContent: 'center',
+//           textAlign: 'center',
+//           width: '100%',
+//         }}
+//       >
+//         <div
+//           style={{
+//             color: 'white',
+//             fontSize: 60,
+//             fontStyle: 'normal',
+//             letterSpacing: '-0.025em',
+//             lineHeight: 1.4,
+//             marginTop: 30,
+//             padding: '0 120px',
+//             whiteSpace: 'pre-wrap',
+//             display: 'flex',
+//           }}
+//         >
+//           {textFrame}.
+//         </div>
+//       </div>
+//     ),
+//     intents: dynamicIntents,
+//   })
+// });
 
-app.frame('/frame-setup-contract/:setupNetwork/:setupPage', async (c) => {
-  console.log("call start: frame-setup-contract/:setupNetwork/:setupPage");
-  // const { buttonValue, inputText, status, req } = c;
-  // const payload = await req.json();
-  // // console.log("payload: ", payload);
-  // let nextFrame = "";
-  // let dynamicIntents = [];
-  // let network = c.req.param('setupNetwork');
-  // let page = c.req.param('setupPage');
-  // let currentPage = parseInt(page!) || 0;
-  // // console.log("chain and page: ", network, page);
-  // let textFrame = "";
-  // let channelId = "";
-  // let ethAddresses: string[] = [];
+// app.frame('/frame-setup-contract/:setupNetwork/:setupPage', async (c) => {
+//   console.log("call start: frame-setup-contract/:setupNetwork/:setupPage");
+//   // const { buttonValue, inputText, status, req } = c;
+//   // const payload = await req.json();
+//   // // console.log("payload: ", payload);
+//   // let nextFrame = "";
+//   // let dynamicIntents = [];
+//   // let network = c.req.param('setupNetwork');
+//   // let page = c.req.param('setupPage');
+//   // let currentPage = parseInt(page!) || 0;
+//   // // console.log("chain and page: ", network, page);
+//   // let textFrame = "";
+//   // let channelId = "";
+//   // let ethAddresses: string[] = [];
 
-  // // console.log("messageBytes: ", payload.trustedData.messageBytes);
-  // // Validate the frame action response and obtain ethAddresses and channelId
-  // const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-  // console.log("frameActionResponse: ", frameActionResponse);
-  // if (frameActionResponse.valid) {
-  //   ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
-  //   let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
-  //   channelId = channel?.id!;
-  // }
-  // const contractAddresses: string[] = (
-  //   await Promise.all(
-  //     ethAddresses.map(async (ethAddress) =>
-  //       getContractsDeployed(ethAddress, network!)
-  //     )
-  //   )
-  // ).flat();
-  // console.log("contractAddresses: ", contractAddresses);
+//   // // console.log("messageBytes: ", payload.trustedData.messageBytes);
+//   // // Validate the frame action response and obtain ethAddresses and channelId
+//   // const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+//   // console.log("frameActionResponse: ", frameActionResponse);
+//   // if (frameActionResponse.valid) {
+//   //   ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
+//   //   let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
+//   //   channelId = channel?.id!;
+//   // }
+//   // const contractAddresses: string[] = (
+//   //   await Promise.all(
+//   //     ethAddresses.map(async (ethAddress) =>
+//   //       getContractsDeployed(ethAddress, network!)
+//   //     )
+//   //   )
+//   // ).flat();
+//   // console.log("contractAddresses: ", contractAddresses);
 
-  // // we've got the contract addresses, now we need to get if referral is set
-  // let referralFee = await getMembersOnlyReferralFee(contractAddresses[currentPage]);
-  // console.log("referralFee: ", referralFee);
-  // if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
-  //   // do aditional logic here
-  // }
+//   // // we've got the contract addresses, now we need to get if referral is set
+//   // let referralFee = await getMembersOnlyReferralFee(contractAddresses[currentPage]);
+//   // console.log("referralFee: ", referralFee);
+//   // if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
+//   //   // do aditional logic here
+//   // }
 
-  // this is failing with 'could not detect network'
-  // let getLockMetadataPromises = contractAddresses.map(async (contractAddress) => {
-  //   return await getLockMetadata(contractAddress, network);
-  // });
-  // let lockMetadata = await Promise.all(getLockMetadataPromises);
+//   // this is failing with 'could not detect network'
+//   // let getLockMetadataPromises = contractAddresses.map(async (contractAddress) => {
+//   //   return await getLockMetadata(contractAddress, network);
+//   // });
+//   // let lockMetadata = await Promise.all(getLockMetadataPromises);
 
-  // const prevBtn = (index: number) => {
-  //   if (contractAddresses.length > 0 && index > 0) {
-  //     return (<Button value={(index - 1).toString()}>prev</Button>);
-  //   }
-  // };
-  // const nextBtn = (index: number) => {
-  //   if (contractAddresses.length > 1 && index < contractAddresses.length) {
-  //     return (<Button value={index.toString()}>next</Button>);
-  //   }
-  // };
+//   // const prevBtn = (index: number) => {
+//   //   if (contractAddresses.length > 0 && index > 0) {
+//   //     return (<Button value={(index - 1).toString()}>prev</Button>);
+//   //   }
+//   // };
+//   // const nextBtn = (index: number) => {
+//   //   if (contractAddresses.length > 1 && index < contractAddresses.length) {
+//   //     return (<Button value={index.toString()}>next</Button>);
+//   //   }
+//   // };
 
-  // if (status == "response" && buttonValue == "done" && inputText) {
-  //   console.log("inputText: ", inputText);
-  //   // Get the channel access rules
-  //   let insertError = await insertChannelRule(channelId, network, inputText, "AND", "ALLOW");
+//   // if (status == "response" && buttonValue == "done" && inputText) {
+//   //   console.log("inputText: ", inputText);
+//   //   // Get the channel access rules
+//   //   let insertError = await insertChannelRule(channelId, network, inputText, "AND", "ALLOW");
 
-  //   if (insertError) {
-  //     console.log("error: ", insertError);
-  //     textFrame = `Error adding the rule.`;
-  //     dynamicIntents = [
-  //       <TextInput placeholder="Contract Address..." />,
-  //       prevBtn(currentPage),
-  //       nextBtn(currentPage),
-  //       <Button value='done'>confirm</Button >,
-  //     ];
-  //   } else {
-  //     textFrame = `Rule added.`;
-  //     let nextFrame = "frame-setup-channel";
-  //     dynamicIntents = [
-  //       <Button action={`/${nextFrame}/${channelId}`}>Done</Button>,
-  //     ];
-  //   }
-  // } else {
-  //   textFrame = `Ok, either confirm ${contractAddresses[currentPage]} on ${network} is the one you want to add, or write it on the input and confirm.`;
-  //   dynamicIntents = [
-  //     <TextInput placeholder="Contract Address..." />,
-  //     prevBtn(currentPage),
-  //     nextBtn(currentPage),
-  //     <Button value='done'>confirm</Button >,
-  //   ];
-  // }
-  console.log("call end: frame-setup-contract/:network/:page");
-  return c.res({
-    image: (
-      <div
-        style={{
-          alignItems: 'center',
-          background: 'black',
-          backgroundSize: '100% 100%',
-          display: 'flex',
-          flexDirection: 'column',
-          flexWrap: 'nowrap',
-          height: '100%',
-          justifyContent: 'center',
-          textAlign: 'center',
-          width: '100%',
-        }}
-      >
-        <div
-          style={{
-            color: 'white',
-            fontSize: 60,
-            fontStyle: 'normal',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.4,
-            marginTop: 30,
-            padding: '0 120px',
-            whiteSpace: 'pre-wrap',
-            display: 'flex',
-          }}
-        >
-          Hey
-        </div>
-      </div>
-    ),
-    intents: []
-  })
-});
+//   //   if (insertError) {
+//   //     console.log("error: ", insertError);
+//   //     textFrame = `Error adding the rule.`;
+//   //     dynamicIntents = [
+//   //       <TextInput placeholder="Contract Address..." />,
+//   //       prevBtn(currentPage),
+//   //       nextBtn(currentPage),
+//   //       <Button value='done'>confirm</Button >,
+//   //     ];
+//   //   } else {
+//   //     textFrame = `Rule added.`;
+//   //     let nextFrame = "frame-setup-channel";
+//   //     dynamicIntents = [
+//   //       <Button action={`/${nextFrame}/${channelId}`}>Done</Button>,
+//   //     ];
+//   //   }
+//   // } else {
+//   //   textFrame = `Ok, either confirm ${contractAddresses[currentPage]} on ${network} is the one you want to add, or write it on the input and confirm.`;
+//   //   dynamicIntents = [
+//   //     <TextInput placeholder="Contract Address..." />,
+//   //     prevBtn(currentPage),
+//   //     nextBtn(currentPage),
+//   //     <Button value='done'>confirm</Button >,
+//   //   ];
+//   // }
+//   console.log("call end: frame-setup-contract/:network/:page");
+//   return c.res({
+//     image: (
+//       <div
+//         style={{
+//           alignItems: 'center',
+//           background: 'black',
+//           backgroundSize: '100% 100%',
+//           display: 'flex',
+//           flexDirection: 'column',
+//           flexWrap: 'nowrap',
+//           height: '100%',
+//           justifyContent: 'center',
+//           textAlign: 'center',
+//           width: '100%',
+//         }}
+//       >
+//         <div
+//           style={{
+//             color: 'white',
+//             fontSize: 60,
+//             fontStyle: 'normal',
+//             letterSpacing: '-0.025em',
+//             lineHeight: 1.4,
+//             marginTop: 30,
+//             padding: '0 120px',
+//             whiteSpace: 'pre-wrap',
+//             display: 'flex',
+//           }}
+//         >
+//           Hey
+//         </div>
+//       </div>
+//     ),
+//     intents: []
+//   })
+// });
 
 app.frame('/frame-purchase/:checkoutId', (c) => {
   const { buttonValue, inputText, status, req } = c;
