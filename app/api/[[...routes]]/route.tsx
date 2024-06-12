@@ -37,60 +37,60 @@ const neynarMiddleware = neynar({
 // Uncomment to use Edge Runtime
 // export const runtime = 'edge'
 
-app.hono.post("/hook-setup", async (c) => {
-  try {
-    console.log("call start: hook-setup");
+// app.hono.post("/hook-setup", async (c) => {
+//   try {
+//     console.log("call start: hook-setup");
 
-    const body = await c.req.json();
-    let cast: Cast = body.data;
-    console.log("cast text: ", cast.text);
+//     const body = await c.req.json();
+//     let cast: Cast = body.data;
+//     console.log("cast text: ", cast.text);
 
-    // 1. Validate the cast author is the owner of the channel
-    // 1.1 Get the channel owner
-    // console.log("cast root_parent_url: ", cast.root_parent_url!);
-    let channel = await getChannel(cast.root_parent_url!);
-    let channelId = channel?.id;
-    let channelLead = channel?.lead?.fid;
+//     // 1. Validate the cast author is the owner of the channel
+//     // 1.1 Get the channel owner
+//     // console.log("cast root_parent_url: ", cast.root_parent_url!);
+//     let channel = await getChannel(cast.root_parent_url!);
+//     let channelId = channel?.id;
+//     let channelLead = channel?.lead?.fid;
 
-    // 1.2 Get the cast author
-    let castAuthor = cast.author.fid;
+//     // 1.2 Get the cast author
+//     let castAuthor = cast.author.fid;
 
-    // 1.3 Compare the channel owner and the cast author and validate the cast text is "@membersonly setup"
-    // Probably second validation will be removed and just validated on the hook
-    let castText = cast.text;
+//     // 1.3 Compare the channel owner and the cast author and validate the cast text is "@membersonly setup"
+//     // Probably second validation will be removed and just validated on the hook
+//     let castText = cast.text;
 
-    // console.log("call start: hook-setup => castAuthor == castText");
-    if (channelLead == castAuthor && castText == BOT_SETUP_TEXT) {
-      console.log("url to embed on reply cast: ", `${APP_URL}/api/frame-setup/${channelId}`);
-      const castResponse = await neynarClient.publishCast(
-        process.env.SIGNER_UUID!,
-        "",
-        {
-          replyTo: cast.hash,
-          embeds: [
-            {
-              url: `${APP_URL}/api/frame-setup/${channelId}`,
-            }
-          ]
-        }
-      );
-      if (castResponse.hash) {
-        console.log("call end: hook-setup");
-        return c.json({ message: 'Cast sent.' }, 200);
-      } else {
-        return c.json({ message: 'Error casting message.' }, 200);
-      }
+//     // console.log("call start: hook-setup => castAuthor == castText");
+//     if (channelLead == castAuthor && castText == BOT_SETUP_TEXT) {
+//       console.log("url to embed on reply cast: ", `${APP_URL}/api/frame-setup/${channelId}`);
+//       const castResponse = await neynarClient.publishCast(
+//         process.env.SIGNER_UUID!,
+//         "",
+//         {
+//           replyTo: cast.hash,
+//           embeds: [
+//             {
+//               url: `${APP_URL}/api/frame-setup/${channelId}`,
+//             }
+//           ]
+//         }
+//       );
+//       if (castResponse.hash) {
+//         console.log("call end: hook-setup");
+//         return c.json({ message: 'Cast sent.' }, 200);
+//       } else {
+//         return c.json({ message: 'Error casting message.' }, 200);
+//       }
 
-    } else {
-      console.log("call end: hook-setup");
-      return c.json({ message: "You are not the owner of this channel." }, 200);
-    }
-  } catch (e) {
-    console.error("Error:", e);
-    return c.json({ message: "Error processing request." }, 200);
-  }
+//     } else {
+//       console.log("call end: hook-setup");
+//       return c.json({ message: "You are not the owner of this channel." }, 200);
+//     }
+//   } catch (e) {
+//     console.error("Error:", e);
+//     return c.json({ message: "Error processing request." }, 200);
+//   }
 
-});
+// });
 
 app.hono.post("/hook-validate", async (c) => {
   try {
@@ -218,8 +218,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
     }
 
     if (status == "response") {
-      // console.log("status: ", status);
-      // console.log("buttonValue: ", buttonValue);
       // Step 2: Show action to achieve, either add or remove a rule
       if (buttonValue == "add" || buttonValue == "remove") {
         console.log("step: add or remove");
@@ -232,7 +230,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
             <Button value='arbitrum'>Arbitrum</Button>
           ];
         } else if (buttonValue == "remove") {
-          // maybe just remove
           dynamicIntents = [
           ];
         }
