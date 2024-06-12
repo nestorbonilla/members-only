@@ -257,7 +257,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
           // do aditional logic here
         }
-        textFrame = `${network}: ${contractAddresses[0]}`;
+        textFrame = `${network}: ${shortenAddress(contractAddresses[0])}`;
 
         dynamicIntents = [
           <TextInput placeholder="Contract Address..." />,
@@ -375,6 +375,10 @@ const getDistinctAddresses = async (fid: string): Promise<Address[]> => {
       .filter(address => typeof address === 'string' && address.startsWith('0x'))
       .map(address => address as Address)
   ));
+};
+
+const shortenAddress = (address: string): string => {
+  return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
 };
 
 function isSetupCast(castText: string): boolean {
