@@ -57,7 +57,7 @@ app.hono.post("/hook-setup", async (c) => {
 
     // console.log("call start: hook-setup => castAuthor == castText");
     if (channelLead == castAuthor && castText == BOT_SETUP_TEXT) {
-      console.log("url to embed on reply cast: ", `${APP_URL}/api/frame-setup-channel/${channelId}`);
+      console.log("url to embed on reply cast: ", `${APP_URL}/api/frame-setup/${channelId}`);
       const castResponse = await neynarClient.publishCast(
         process.env.SIGNER_UUID!,
         "",
@@ -65,8 +65,9 @@ app.hono.post("/hook-setup", async (c) => {
           replyTo: cast.hash,
           embeds: [
             {
-              url: `${APP_URL}/api/frame-setup-channel/${channelId}`,
-            }]
+              url: `${APP_URL}/api/frame-setup/${channelId}`,
+            }
+          ]
         }
       );
       if (castResponse.hash) {
@@ -145,9 +146,9 @@ app.frame('/frame-setup/:channelId', async (c) => {
   // console.log("req: ", req);
   let ethAddresses: string[] = [];
   // try {
-  const body = await req.json();
-  let cast: Cast = body.data;
-  ethAddresses = cast.author.verified_addresses.eth_addresses;
+  // const body = await req.json();
+  // let cast: Cast = body.data;
+  // ethAddresses = cast.author.verified_addresses.eth_addresses;
   //   console.log("ethAddresses: ", ethAddresses);
   // } catch (error) {
   //   console.log("error: ", error);
@@ -176,7 +177,7 @@ app.frame('/frame-setup/:channelId', async (c) => {
   //   }
   // }
 
-  // ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
+  ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
   // console.log("buttonValue: ", buttonValue);
 
   if (interactorIsChannelLead) {
