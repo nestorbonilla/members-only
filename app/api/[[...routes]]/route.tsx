@@ -107,8 +107,8 @@ app.hono.post("/hook-validate", async (c) => {
       let channel = await getChannel(cast.root_parent_url!);
       let channelRules = await getChannelRules(channel?.id!);
       const userAddresses = cast.author.verified_addresses.eth_addresses;
-      let validMembership = await getValidMembershipWithinRules(channelRules, userAddresses);
-      // let validMembership = true;
+      // let validMembership = await getValidMembershipWithinRules(channelRules, userAddresses);
+      let validMembership = true;
 
       if (validMembership) {
         let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash);
@@ -218,8 +218,8 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
     }
 
     if (status == "response") {
-      console.log("status: ", status);
-      console.log("buttonValue: ", buttonValue);
+      // console.log("status: ", status);
+      // console.log("buttonValue: ", buttonValue);
       // Step 2: Show action to achieve, either add or remove a rule
       if (buttonValue == "add" || buttonValue == "remove") {
         console.log("step: add or remove");
@@ -301,7 +301,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         console.log("step: contract confirmation");
         let [_, network, contractAddress] = buttonValue!.split("-");
 
-        console.log("contractAddress: ", contractAddress);
+        // console.log("contractAddress: ", contractAddress);
         console.log("network: ", network);
 
         let insertError = await insertChannelRule(channelId, network, contractAddress, "AND", "ALLOW");
