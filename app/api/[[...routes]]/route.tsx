@@ -43,6 +43,7 @@ app.hono.post("/hook-setup", async (c) => {
 
     // 1. Validate the cast author is the owner of the channel
     // 1.1 Get the channel owner
+    console.log("cast root_parent_url: ", cast.root_parent_url!);
     let channel = await getChannel(cast.root_parent_url!);
     let channelId = channel?.id;
     let channelLead = channel?.lead?.fid;
@@ -672,7 +673,9 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
 }
 
 const getChannel = async (rootParentUrl: string): Promise<Channel | null> => {
+  console.log("getChannel - before");
   let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([rootParentUrl], { type: ChannelType.ParentUrl })).channels;
+  console.log("getChannel - after");
   if (channels && channels.length > 0) {
     return channels[0];
   } else {
