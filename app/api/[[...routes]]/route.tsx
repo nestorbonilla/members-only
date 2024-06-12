@@ -2,7 +2,7 @@
 
 import { Button, Frog, TextInput } from 'frog';
 import { devtools } from 'frog/dev';
-import { neynar } from 'frog/hubs';
+import { neynar, type NeynarVariables } from "frog/middlewares";
 import { handle } from 'frog/next';
 import { serveStatic } from 'frog/serve-static';
 import neynarClient from '@/app/utils/neynar/client';
@@ -22,11 +22,16 @@ const app = new Frog({
   assetsPath: '/',
   basePath: '/api',
   origin: process.env.APP_URL,
-  hub: neynar({ apiKey: NEYNAR_API_KEY! }),
+  // hub: neynar({ apiKey: NEYNAR_API_KEY! }),
   imageOptions: {
-    format: "svg",
+    format: "png",
   },
   verify: process.env.NODE_ENV === 'production' // leave it as is, if not issue with frog local debug tool
+});
+
+const neynarMiddleware = neynar({
+  apiKey: "NEYNAR_FROG_FM",
+  features: ["interactor", "cast"],
 });
 
 // Uncomment to use Edge Runtime
@@ -139,16 +144,16 @@ app.hono.post("/hook-validate", async (c) => {
   }
 });
 
-app.frame('/frame-setup/:channelId', async (c) => {
+app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   console.log("call start: frame-setup/:channelId");
   const { buttonValue, inputText, status, req } = c;
-  console.log("req: ", req);
+  // console.log("req: ", req);
   let ethAddresses: string[] = [];
   // try {
-  const body = await req.json();
-  console.log("body: ", body);
-  let cast: Cast = body.data;
-  console.log("cast: ", cast);
+  // const payload = await req.json();
+  // console.log("body: ", payload);
+  // let cast: Cast = payload.data;
+  // console.log("cast: ", cast);
   // ethAddresses = cast.author.verified_addresses.eth_addresses;
   //   console.log("ethAddresses: ", ethAddresses);
   // } catch (error) {
