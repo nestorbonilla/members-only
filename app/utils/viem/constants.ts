@@ -10,7 +10,7 @@ const publicClient = createPublicClient({
 export const getMembersOnlyReferralFee = async (contractAddress: string): Promise<any> => {
   let referralFee = await publicClient.readContract({
     address: contractAddress as `0x${string}`,
-    abi: contracts.UnlockV13.abi,
+    abi: contracts.PublicLockV14.abi,
     functionName: "referrerFees",
     args: [process.env.MO_ADDRESS],
   });

@@ -12,6 +12,7 @@ import { hasMembership, getLockMetadata, getUnlockProxyAddress, getValidMembersh
 import { getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getAlchemyRpc } from '@/app/utils/alchemy/constants';
 import { getMembersOnlyReferralFee } from '@/app/utils/viem/constants';
+import { text } from 'stream/consumers';
 
 const APP_URL = process.env.APP_URL;
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
@@ -139,34 +140,163 @@ app.hono.post("/hook-validate", async (c) => {
 
 app.frame('/frame-setup-channel/:channelId', async (c) => {
   console.log("call start: frame-setup-channel/:channelId");
-  const { req } = c;
-  const channelId = req.param('channelId');
-  console.log("channelId: ", channelId);
-  let dynamicIntents = [];
-  let nextFrame = "frame-setup-channel-action";
-  let prevFrame = "/";
+  const { buttonValue, inputText, status, req } = c;
+  let channelId = req.param('channelId');
+  // console.log("channelId: ", channelId);
+  let dynamicIntents: any[] = [];
+  let textFrame = "";
+  let nextFrame = "frame-setup-action";
   let conditions = 0;
+  let ethAddresses: string[] = [];
+
+  const payload = await req.json();
+  // Validate the frame action response and obtain ethAddresses and channelId
+  const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+  // console.log("frameActionResponse: ", frameActionResponse);
+  if (frameActionResponse.valid) {
+    ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
+    // let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
+    // channelId = channel?.id!;
+  }
+  // ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
+  // console.log("buttonValue: ", buttonValue);
 
   // Get the channel access rules
   let channelRules = await getChannelRules(channelId!);
-  if (channelRules?.length! > 0) {
-    conditions = channelRules!.length;
-    console.log("conditions: ", conditions);
-    if (conditions >= ACCESS_RULES_LIMIT) {
+  conditions = channelRules!.length;
+
+  if (status == "initial" || (status == "response" && buttonValue == "done")) {
+    // Step 1: Show the number of rules on the channel
+    console.log("step: initial");
+    textFrame = `${channelId} channel has ${conditions == 0 ? "no" : conditions} rules`;
+    if (channelRules?.length! == 0) {
       dynamicIntents = [
-        <Button action={`/${nextFrame}/${channelId}/remove`}>Remove</Button>
+        <Button value='add'>Add</Button>
       ];
     } else {
-      dynamicIntents = [
-        <Button action={`/${nextFrame}/${channelId}/add`}>Add</Button>,
-        <Button action={`/${nextFrame}/${channelId}/remove`}>Remove</Button>
-      ];
+      if (conditions >= ACCESS_RULES_LIMIT) {
+        dynamicIntents = [
+          <Button value='remove'>Remove</Button>
+        ];
+      } else {
+        dynamicIntents = [
+          <Button value='add'>Add</Button>,
+          <Button value='remove'>Remove</Button>
+        ];
+      }
     }
-  } else {
-    dynamicIntents = [
-      <Button action={`/${nextFrame}/${channelId}/add`}>Add</Button>
-    ];
   }
+
+  if (status == "response") {
+
+    // Step 2: Show action to achieve, either add or remove a rule
+    if (buttonValue == "add" || buttonValue == "remove") {
+      console.log("step: add or remove");
+      nextFrame = "frame-setup-contract";
+      if (buttonValue == "add") {
+        let firstPage = 0;
+        textFrame = `To add a rule on channel ${channelId}, start by selecting the network the contract is deployed on.`;
+        dynamicIntents = [
+          <Button value='base'>Base</Button>,
+          <Button value='optimism'>Optimism</Button>,
+          <Button value='arbitrum'>Arbitrum</Button>
+        ];
+      } else if (buttonValue == "remove") {
+        // maybe just remove
+        dynamicIntents = [
+          <Button action={`/${nextFrame}/${channelId}/remove`}>Remove</Button>
+        ];
+      }
+    } else if (buttonValue == "base" || buttonValue == "optimism" || buttonValue == "arbitrum") {
+
+      // Step 3: Show the contract addresses deployed on the selected network
+      console.log("step: network selection");
+      nextFrame = "frame-setup-contract";
+      let network = buttonValue;
+
+      const contractAddresses: string[] = (
+        await Promise.all(
+          ethAddresses.map(async (ethAddress) =>
+            getContractsDeployed(ethAddress, network!)
+          )
+        )
+      ).flat();
+      console.log("contractAddresses: ", contractAddresses);
+
+      // we've got the contract addresses, now we need to get if referral is set
+      let referralFee = await getMembersOnlyReferralFee(contractAddresses[0]);
+      console.log("referralFee: ", referralFee);
+      if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
+        // do aditional logic here
+      }
+      textFrame = `${network}: ${contractAddresses[0]}`;
+
+      dynamicIntents = [
+        <TextInput placeholder="Contract Address..." />,
+        <Button value={`page-${network}-0`}>Prev</Button>,
+        <Button value={`page-${network}-0`}>Next</Button>,
+        <Button value={`confirm-${network}-${contractAddresses[0]}`}>confirm</Button >,
+      ];
+
+    } else if (buttonValue!.startsWith("page-")) {
+      console.log("step: contract pagination");
+      // Step 4: Show the contract address to confirm or write a new one
+      let [_, network, page] = buttonValue!.split("-");
+      let currentPage = parseInt(page);
+      let contractAddresses: string[] = await getContractsDeployed(ethAddresses[currentPage], network);
+      let referralFee = await getMembersOnlyReferralFee(contractAddresses[0]);
+      // console.log("referralFee: ", referralFee);
+      // if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
+      //   // do aditional logic here
+      // }
+
+      textFrame = `${network}: ${contractAddresses[currentPage]}`;
+
+      const prevBtn = (index: number) => {
+        if (contractAddresses.length > 0 && index > 0) {
+          return (<Button value={(index - 1).toString()}>prev</Button>);
+        }
+      };
+      const nextBtn = (index: number) => {
+        if (contractAddresses.length > 1 && index < contractAddresses.length) {
+          return (<Button value={index.toString()}>next</Button>);
+        }
+      };
+
+      dynamicIntents = [
+        <TextInput placeholder="Contract Address..." />,
+        prevBtn(currentPage),
+        nextBtn(currentPage),
+        <Button value={`confirm-${network}-${contractAddresses[currentPage]}`}>confirm</Button >,
+      ];
+    } else if (buttonValue!.startsWith("confirm-")) {
+      console.log("step: contract confirmation");
+      let [_, network, contractAddress] = buttonValue!.split("-");
+
+      console.log("contractAddress: ", contractAddress);
+      console.log("network: ", network);
+
+      let insertError = await insertChannelRule(channelId, network, contractAddress, "AND", "ALLOW");
+      if (insertError) {
+        console.log("error: ", insertError);
+        textFrame = `Error adding the rule.`;
+        dynamicIntents = [
+          // <TextInput placeholder="Contract Address..." />,
+          // prevBtn(currentPage),
+          // nextBtn(currentPage),
+          <Button value='done'>Complete</Button >,
+        ];
+      } else {
+        textFrame = `Rule added.`;
+        dynamicIntents = [
+          <Button value={'done'}>Complete</Button>,
+        ];
+      }
+    }
+  }
+
+
+  // console.log("dynamicIntents: ", dynamicIntents);
   console.log("call end: frame-setup-channel/:channelId");
   return c.res({
     image: (
@@ -197,7 +327,7 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
             display: 'flex',
           }}
         >
-          {channelId} channel has {conditions == 0 ? "no" : conditions} rules
+          {textFrame}
         </div>
       </div>
     ),
@@ -205,32 +335,32 @@ app.frame('/frame-setup-channel/:channelId', async (c) => {
   })
 });
 
-app.frame('/frame-setup-channel-action/:channelId/:action', async (c) => {
-  console.log("call start: frame-channel-action/:channelId/:action");
+app.frame('/frame-setup-action/:channelId/:setupAction', async (c) => {
+  console.log("call start: frame-setup-action/:channelId/:setupAction");
   const { req } = c;
+  console.log("req: ", req);
   const channelId = req.param('channelId');
-  const action = req.param('action');
+  const action = req.param('setupAction');
   console.log("channelId and action: ", channelId, action);
 
   let dynamicIntents = [];
   let nextFrame = "";
-  let prevFrame = "frame-setup-channel";
   let textFrame = "";
   let firstPage = 0;
 
-  if (action == "add") {
-    nextFrame = "frame-setup-contract";
-    textFrame = `To add a rule on channel ${channelId}, start by selecting the network the contract is deployed on.`;
-  } else if (action == "remove") {
-    nextFrame = "frame-setup-remove";
-    textFrame = `Is this the rule you want to remove from channel ${channelId}?`;
-  }
+  // if (action == "add") {
+  nextFrame = "frame-setup-contract";
+  textFrame = `To add a rule on channel ${channelId}, start by selecting the network the contract is deployed on.`;
+  // } else if (action == "remove") {
+  //   nextFrame = "frame-setup-remove";
+  //   textFrame = `Is this the rule you want to remove from channel ${channelId}?`;
+  // }
   dynamicIntents = [
     <Button action={`/${nextFrame}/base/${firstPage}`}>Prev</Button>,
     <Button action={`/${nextFrame}/optimism/${firstPage}`}>Next</Button>,
     <Button action={`/${nextFrame}/arbitrum/${firstPage}`}>Confirm</Button>
   ];
-  console.log("call end: frame-channel/:channelId");
+  console.log("call end: frame-setup-channel-action/:channelId/:action");
   return c.res({
     image: (
       <div
@@ -260,7 +390,7 @@ app.frame('/frame-setup-channel-action/:channelId/:action', async (c) => {
             display: 'flex',
           }}
         >
-          {textFrame}
+          {textFrame}.
         </div>
       </div>
     ),
@@ -268,45 +398,45 @@ app.frame('/frame-setup-channel-action/:channelId/:action', async (c) => {
   })
 });
 
-app.frame('/frame-setup-contract/:network/:page', async (c) => {
-  console.log("call start: frame-setup-contract/:network/:page");
-  const { buttonValue, inputText, status, req } = c;
-  const payload = await req.json();
-  // console.log("payload: ", payload);
-  let nextFrame = "";
-  let dynamicIntents = [];
-  const network = c.req.param('network');
-  const page = c.req.param('page');
-  let currentPage = parseInt(page!);
-  // console.log("chain and page: ", network, page);
-  let textFrame = "";
-  let channelId = "";
-  let ethAddresses: string[] = [];
+app.frame('/frame-setup-contract/:setupNetwork/:setupPage', async (c) => {
+  console.log("call start: frame-setup-contract/:setupNetwork/:setupPage");
+  // const { buttonValue, inputText, status, req } = c;
+  // const payload = await req.json();
+  // // console.log("payload: ", payload);
+  // let nextFrame = "";
+  // let dynamicIntents = [];
+  // let network = c.req.param('setupNetwork');
+  // let page = c.req.param('setupPage');
+  // let currentPage = parseInt(page!) || 0;
+  // // console.log("chain and page: ", network, page);
+  // let textFrame = "";
+  // let channelId = "";
+  // let ethAddresses: string[] = [];
 
-  // console.log("messageBytes: ", payload.trustedData.messageBytes);
-  // Validate the frame action response and obtain ethAddresses and channelId
-  const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-  console.log("frameActionResponse: ", frameActionResponse);
-  if (frameActionResponse.valid) {
-    ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
-    let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
-    channelId = channel?.id!;
-  }
-  const contractAddresses: string[] = (
-    await Promise.all(
-      ethAddresses.map(async (ethAddress) =>
-        getContractsDeployed(ethAddress, network!)
-      )
-    )
-  ).flat();
-  console.log("contractAddresses: ", contractAddresses);
+  // // console.log("messageBytes: ", payload.trustedData.messageBytes);
+  // // Validate the frame action response and obtain ethAddresses and channelId
+  // const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+  // console.log("frameActionResponse: ", frameActionResponse);
+  // if (frameActionResponse.valid) {
+  //   ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
+  //   let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
+  //   channelId = channel?.id!;
+  // }
+  // const contractAddresses: string[] = (
+  //   await Promise.all(
+  //     ethAddresses.map(async (ethAddress) =>
+  //       getContractsDeployed(ethAddress, network!)
+  //     )
+  //   )
+  // ).flat();
+  // console.log("contractAddresses: ", contractAddresses);
 
-  // we've got the contract addresses, now we need to get if referral is set
-  let referralFee = await getMembersOnlyReferralFee(contractAddresses[currentPage]);
-  console.log("referralFee: ", referralFee);
-  if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
-    // do aditional logic here
-  }
+  // // we've got the contract addresses, now we need to get if referral is set
+  // let referralFee = await getMembersOnlyReferralFee(contractAddresses[currentPage]);
+  // console.log("referralFee: ", referralFee);
+  // if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
+  //   // do aditional logic here
+  // }
 
   // this is failing with 'could not detect network'
   // let getLockMetadataPromises = contractAddresses.map(async (contractAddress) => {
@@ -314,47 +444,47 @@ app.frame('/frame-setup-contract/:network/:page', async (c) => {
   // });
   // let lockMetadata = await Promise.all(getLockMetadataPromises);
 
-  const prevBtn = (index: number) => {
-    if (contractAddresses.length > 0 && index > 0) {
-      return (<Button value={(index - 1).toString()}>prev</Button>);
-    }
-  };
-  const nextBtn = (index: number) => {
-    if (contractAddresses.length > 1 && index < contractAddresses.length) {
-      return (<Button value={index.toString()}>next</Button>);
-    }
-  };
+  // const prevBtn = (index: number) => {
+  //   if (contractAddresses.length > 0 && index > 0) {
+  //     return (<Button value={(index - 1).toString()}>prev</Button>);
+  //   }
+  // };
+  // const nextBtn = (index: number) => {
+  //   if (contractAddresses.length > 1 && index < contractAddresses.length) {
+  //     return (<Button value={index.toString()}>next</Button>);
+  //   }
+  // };
 
-  if (status == "response" && buttonValue == "done" && inputText) {
-    console.log("inputText: ", inputText);
-    // Get the channel access rules
-    let insertError = await insertChannelRule(channelId, network, inputText, "AND", "ALLOW");
+  // if (status == "response" && buttonValue == "done" && inputText) {
+  //   console.log("inputText: ", inputText);
+  //   // Get the channel access rules
+  //   let insertError = await insertChannelRule(channelId, network, inputText, "AND", "ALLOW");
 
-    if (insertError) {
-      console.log("error: ", insertError);
-      textFrame = `Error adding the rule.`;
-      dynamicIntents = [
-        <TextInput placeholder="Contract Address..." />,
-        prevBtn(currentPage),
-        nextBtn(currentPage),
-        <Button value='done'>confirm</Button >,
-      ];
-    } else {
-      textFrame = `Rule added.`;
-      let nextFrame = "frame-setup-channel";
-      dynamicIntents = [
-        <Button action={`/${nextFrame}/${channelId}`}>Done</Button>,
-      ];
-    }
-  } else {
-    textFrame = `Ok, either confirm ${contractAddresses[currentPage]} on ${network} is the one you want to add, or write it on the input and confirm.`;
-    dynamicIntents = [
-      <TextInput placeholder="Contract Address..." />,
-      prevBtn(currentPage),
-      nextBtn(currentPage),
-      <Button value='done'>confirm</Button >,
-    ];
-  }
+  //   if (insertError) {
+  //     console.log("error: ", insertError);
+  //     textFrame = `Error adding the rule.`;
+  //     dynamicIntents = [
+  //       <TextInput placeholder="Contract Address..." />,
+  //       prevBtn(currentPage),
+  //       nextBtn(currentPage),
+  //       <Button value='done'>confirm</Button >,
+  //     ];
+  //   } else {
+  //     textFrame = `Rule added.`;
+  //     let nextFrame = "frame-setup-channel";
+  //     dynamicIntents = [
+  //       <Button action={`/${nextFrame}/${channelId}`}>Done</Button>,
+  //     ];
+  //   }
+  // } else {
+  //   textFrame = `Ok, either confirm ${contractAddresses[currentPage]} on ${network} is the one you want to add, or write it on the input and confirm.`;
+  //   dynamicIntents = [
+  //     <TextInput placeholder="Contract Address..." />,
+  //     prevBtn(currentPage),
+  //     nextBtn(currentPage),
+  //     <Button value='done'>confirm</Button >,
+  //   ];
+  // }
   console.log("call end: frame-setup-contract/:network/:page");
   return c.res({
     image: (
@@ -385,11 +515,11 @@ app.frame('/frame-setup-contract/:network/:page', async (c) => {
             display: 'flex',
           }}
         >
-          {textFrame}
+          Hey
         </div>
       </div>
     ),
-    intents: dynamicIntents
+    intents: []
   })
 });
 
