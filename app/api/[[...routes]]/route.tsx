@@ -12,7 +12,6 @@ import { hasMembership, getLockMetadata, getUnlockProxyAddress, getValidMembersh
 import { getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getAlchemyRpc } from '@/app/utils/alchemy/constants';
 import { getMembersOnlyReferralFee } from '@/app/utils/viem/constants';
-import { text } from 'stream/consumers';
 
 const APP_URL = process.env.APP_URL;
 const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
@@ -192,7 +191,7 @@ app.frame('/frame-setup/:channelId', async (c) => {
       console.log("step: initial");
       let lockMetadata;
       if (channelRules?.length! > 0) {
-        lockMetadata = getLockMetadata(channelRules![0].contract_address, channelRules![0].network);
+        // lockMetadata = getLockMetadata(channelRules![0].contract_address, channelRules![0].network);
       }
       textFrame = `${channelId} channel has ${conditions == 0 ? "no" : conditions} rules`;
       if (channelRules?.length! == 0) {
