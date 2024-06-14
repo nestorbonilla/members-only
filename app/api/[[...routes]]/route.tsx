@@ -171,10 +171,12 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   let textFrame = "";
   let conditions = 0;
 
+  console.log("frame-setup/:channelId before getChannelRules");
   // Get the channel access rules
   let channelRules = await getChannelRules(channelId!);
   conditions = channelRules!.length;
 
+  console.log("frame-setup/:channelId before status == initial || status == response && buttonValue == done");
   if (status == "initial" || (status == "response" && buttonValue == "done")) {
 
     // Step 1: Show the number of rules on the channel
@@ -202,7 +204,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
     }
   }
 
-
+  console.log("frame-setup/:channelId before 2nd status == response");
   if (status == "response") {
     if (interactorIsChannelLead) {
       // Step 2: Show action to achieve, either add or remove a rule
