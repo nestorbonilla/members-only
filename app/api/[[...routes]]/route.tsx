@@ -144,11 +144,12 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   let ethAddresses: string[] = [];
   let interactorIsChannelLead = false;
   if (status == "response") {
-    console.log("status: response");
+    console.log("frame-setup/:channelId status: response");
     // Validate the frame action response and obtain ethAddresses and channelId
     const payload = await req.json();
-    console.log("payload: ", payload);
+    console.log("frame-setup/:channelId payload: ", payload);
     const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+    console.log("frame-setup/:channelId pass");
     if (frameActionResponse.valid) {
       ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
       let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
