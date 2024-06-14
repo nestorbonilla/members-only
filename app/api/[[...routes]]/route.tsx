@@ -144,7 +144,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   let ethAddresses: string[] = [];
   let interactorIsChannelLead = false;
   if (status == "response") {
-    console.log("frame-setup/:channelId status: response");
+    console.log("frame-setup/:channelId status: ", status);
     // Validate the frame action response and obtain ethAddresses and channelId
     const payload = await req.json();
     console.log("frame-setup/:channelId payload: ", payload);
