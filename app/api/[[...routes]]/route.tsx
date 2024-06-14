@@ -8,13 +8,12 @@ import { serveStatic } from 'frog/serve-static';
 import neynarClient from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
 import { Address } from 'viem';
-import { hasMembership, getLockMetadata, getUnlockProxyAddress, getValidMembershipWithinRules } from '@/app/utils/unlock/membership';
+import { getUnlockProxyAddress, getValidMembershipWithinRules } from '@/app/utils/unlock/membership';
 import { getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getAlchemyRpc } from '@/app/utils/alchemy/constants';
-import { getMembersOnlyReferralFee } from '@/app/utils/viem/constants';
+import { getLockName, getMembersOnlyReferralFee } from '@/app/utils/viem/constants';
 
 const APP_URL = process.env.APP_URL;
-const NEYNAR_API_KEY = process.env.NEYNAR_API_KEY;
 const BOT_SETUP_TEXT = process.env.BOT_SETUP_TEXT; // @membersonly setup
 const ACCESS_RULES_LIMIT = 3;
 
@@ -22,7 +21,6 @@ const app = new Frog({
   assetsPath: '/',
   basePath: '/api',
   origin: process.env.APP_URL,
-  // hub: neynar({ apiKey: NEYNAR_API_KEY! }),
   imageOptions: {
     format: "png",
   },
@@ -30,7 +28,7 @@ const app = new Frog({
 });
 
 const neynarMiddleware = neynar({
-  apiKey: "NEYNAR_FROG_FM",
+  apiKey: process.env.NEYNAR_API_KEY!,
   features: ["interactor", "cast"],
 });
 
@@ -149,6 +147,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   const { buttonValue, inputText, status, req } = c;
   // console.log("req: ", req);
   let ethAddresses: string[] = [];
+  let interactorIsChannelLead = false;
   // try {
   // const payload = await req.json();
   // console.log("body: ", payload);
@@ -159,7 +158,23 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   // } catch (error) {
   //   console.log("error: ", error);
   // }
-  // const payload = await req.json();
+  if (status == "response") {
+    const payload = await req.json();
+    // Validate the frame action response and obtain ethAddresses and channelId
+    const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+    console.log("frameActionResponse: ", frameActionResponse);
+    if (frameActionResponse.valid) {
+      ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
+      let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
+      let frameChannelId = channel?.id!;
+      let interactor = frameActionResponse.action.signer?.client?.fid;
+      let channelLead = channel?.lead?.fid;
+      if (channelLead == interactor) {
+        interactorIsChannelLead = true;
+      }
+    }
+  }
+
 
   let channelId = req.param('channelId');
   // console.log("channelId: ", channelId);
@@ -167,7 +182,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   let textFrame = "";
   let conditions = 0;
 
-  let interactorIsChannelLead = true;
+
 
   // Validate the frame action response and obtain ethAddresses and channelId
   // const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
@@ -183,41 +198,44 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   //   }
   // }
 
-  ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
+  // ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
   // console.log("buttonValue: ", buttonValue);
 
-  if (interactorIsChannelLead) {
-    // Get the channel access rules
-    let channelRules = await getChannelRules(channelId!);
-    conditions = channelRules!.length;
 
-    if (status == "initial" || (status == "response" && buttonValue == "done")) {
-      // Step 1: Show the number of rules on the channel
-      console.log("step: initial");
-      let lockMetadata;
-      if (channelRules?.length! > 0) {
-        // lockMetadata = getLockMetadata(channelRules![0].contract_address, channelRules![0].network);
-      }
-      textFrame = `${channelId} channel has ${conditions == 0 ? "no" : conditions} rules`;
-      if (channelRules?.length! == 0) {
+  // Get the channel access rules
+  let channelRules = await getChannelRules(channelId!);
+  conditions = channelRules!.length;
+
+  if (status == "initial" || (status == "response" && buttonValue == "done")) {
+
+    // Step 1: Show the number of rules on the channel
+    console.log("step: initial");
+    let lockMetadata;
+    if (channelRules?.length! > 0) {
+      lockMetadata = await getLockName(channelRules![0].contract_address, channelRules![0].network);
+    }
+    textFrame = `${channelId} channel has ${conditions == 0 ? "no" : conditions} rules. ${lockMetadata}`;
+    if (channelRules?.length! == 0) {
+      dynamicIntents = [
+        <Button value='add'>Add</Button>
+      ];
+    } else {
+      if (conditions >= ACCESS_RULES_LIMIT) {
         dynamicIntents = [
-          <Button value='add'>Add</Button>
+          <Button value='remove'>Remove</Button>
         ];
       } else {
-        if (conditions >= ACCESS_RULES_LIMIT) {
-          dynamicIntents = [
-            <Button value='remove'>Remove</Button>
-          ];
-        } else {
-          dynamicIntents = [
-            <Button value='add'>Add</Button>,
-            <Button value='remove'>Remove</Button>
-          ];
-        }
+        dynamicIntents = [
+          <Button value='add'>Add</Button>,
+          <Button value='remove'>Remove</Button>
+        ];
       }
     }
+  }
 
-    if (status == "response") {
+
+  if (status == "response") {
+    if (interactorIsChannelLead) {
       // Step 2: Show action to achieve, either add or remove a rule
       if (buttonValue == "add" || buttonValue == "remove") {
         console.log("step: add or remove");
@@ -249,7 +267,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         console.log("contractAddresses: ", contractAddresses);
 
         // we've got the contract addresses, now we need to get if referral is set
-        let referralFee = await getMembersOnlyReferralFee(contractAddresses[0]);
+        let referralFee = await getMembersOnlyReferralFee(contractAddresses[0], network);
         console.log("referralFee: ", referralFee);
         if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
           // do aditional logic here
@@ -269,7 +287,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         let [_, network, page] = buttonValue!.split("-");
         let currentPage = parseInt(page);
         let contractAddresses: string[] = await getContractsDeployed(ethAddresses[currentPage], network);
-        let referralFee = await getMembersOnlyReferralFee(contractAddresses[0]);
+        let referralFee = await getMembersOnlyReferralFee(contractAddresses[0], network);
         // console.log("referralFee: ", referralFee);
         // if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
         //   // do aditional logic here
@@ -318,10 +336,10 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           ];
         }
       }
+    } else {
+      textFrame = "This is a @membersonly frame to configure rules, know more about me at my profile.";
+      dynamicIntents = [];
     }
-  } else {
-    textFrame = "This is a @membersonly frame to configure rules, know more about me at my profile.";
-    dynamicIntents = [];
   }
   console.log("call end: frame-setup-channel/:channelId");
   return c.res({

@@ -15,10 +15,6 @@ export async function getValidKey({
   lockAddress,
   userAddress,
 }: GetHasValidKeyOptions) {
-  // const unlockWeb3Service = new Web3Service(networks);
-  console.log("getValidKey => lockAddress: ", lockAddress);
-  console.log("getValidKey => userAddress: ", userAddress);
-  console.log("getValidKey => network: ", network);
   const key = await web3Service.getKeyByLockForOwner(
     lockAddress,
     userAddress,
@@ -40,10 +36,7 @@ export async function getValidKey({
 
 export const getLockMetadata = async (lockAddress: string, network: string) => {
   let networkNumber = getNetworkNumber(network);
-  console.log("getLockMetadata => lockAddress: ", lockAddress);
-  console.log("getLockMetadata => networkNumber: ", networkNumber);
   let lockMetadata = await web3Service.getLock(lockAddress, networkNumber);
-  console.log("getLockMetadata => lockMetadata: ", lockMetadata);
   return lockMetadata;
 }
 
