@@ -446,7 +446,10 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
 }
 
 const getChannel = async (rootParentUrl: string): Promise<Channel | null> => {
-  let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([rootParentUrl], { type: ChannelType.ParentUrl })).channels;
+  let channelId = getLastPartOfUrl(rootParentUrl);
+  console.log("getChannel - channelId: ", channelId);
+  // let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([rootParentUrl], { type: ChannelType.ParentUrl })).channels;
+  let channels: Array<Channel> = (await neynarClient.searchChannels(channelId)).channels;
   if (channels && channels.length > 0) {
     return channels[0];
   } else {
