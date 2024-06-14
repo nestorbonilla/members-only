@@ -8,14 +8,10 @@ import { serveStatic } from 'frog/serve-static';
 import neynarClient from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
 import { Address } from 'viem';
-import { getUnlockProxyAddress, getValidMembershipWithinRules } from '@/app/utils/unlock/membership';
+import { getUnlockProxyAddress } from '@/app/utils/unlock/membership';
 import { getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getAlchemyRpc } from '@/app/utils/alchemy/constants';
-import { getLockName, getMembersOnlyReferralFee } from '@/app/utils/viem/constants';
-
-const APP_URL = process.env.APP_URL;
-const BOT_SETUP_TEXT = process.env.BOT_SETUP_TEXT; // @membersonly setup
-const ACCESS_RULES_LIMIT = 3;
+import { doAddressesHaveValidMembershipInRules, getLockName, getMembersOnlyReferralFee } from '@/app/utils/viem/constants';
 
 const app = new Frog({
   assetsPath: '/',
@@ -35,84 +31,84 @@ const neynarMiddleware = neynar({
 // Uncomment to use Edge Runtime
 // export const runtime = 'edge'
 
-// app.hono.post("/hook-setup", async (c) => {
-//   try {
-//     console.log("call start: hook-setup");
+app.hono.post("/hook-setup", async (c) => {
+  try {
+    console.log("call start: hook-setup");
 
-//     const body = await c.req.json();
-//     let cast: Cast = body.data;
-//     console.log("cast text: ", cast.text);
+    const body = await c.req.json();
+    let cast: Cast = body.data;
+    console.log("cast text: ", cast.text);
 
-//     // 1. Validate the cast author is the owner of the channel
-//     // 1.1 Get the channel owner
-//     // console.log("cast root_parent_url: ", cast.root_parent_url!);
-//     let channel = await getChannel(cast.root_parent_url!);
-//     let channelId = channel?.id;
-//     let channelLead = channel?.lead?.fid;
+    // 1. Validate the cast author is the owner of the channel
+    // 1.1 Get the channel owner
+    let channel = await getChannel(cast.root_parent_url!);
+    let channelId = channel?.id;
+    let channelLead = channel?.lead?.fid;
 
-//     // 1.2 Get the cast author
-//     let castAuthor = cast.author.fid;
+    // 1.2 Get the cast author
+    let castAuthor = cast.author.fid;
 
-//     // 1.3 Compare the channel owner and the cast author and validate the cast text is "@membersonly setup"
-//     // Probably second validation will be removed and just validated on the hook
-//     let castText = cast.text;
+    // 1.3 Compare the channel owner and the cast author and validate the cast text is "@membersonly setup"
+    // Probably second validation will be removed and just validated on the hook
+    let castText = cast.text;
 
-//     // console.log("call start: hook-setup => castAuthor == castText");
-//     if (channelLead == castAuthor && castText == BOT_SETUP_TEXT) {
-//       console.log("url to embed on reply cast: ", `${APP_URL}/api/frame-setup/${channelId}`);
-//       const castResponse = await neynarClient.publishCast(
-//         process.env.SIGNER_UUID!,
-//         "",
-//         {
-//           replyTo: cast.hash,
-//           embeds: [
-//             {
-//               url: `${APP_URL}/api/frame-setup/${channelId}`,
-//             }
-//           ]
-//         }
-//       );
-//       if (castResponse.hash) {
-//         console.log("call end: hook-setup");
-//         return c.json({ message: 'Cast sent.' }, 200);
-//       } else {
-//         return c.json({ message: 'Error casting message.' }, 200);
-//       }
+    // console.log("call start: hook-setup => castAuthor == castText");
+    if (channelLead == castAuthor && castText == process.env.BOT_SETUP_TEXT) {
+      console.log("url to embed on reply cast: ", `${process.env.APP_URL}/api/frame-setup/${channelId}`);
+      const castResponse = await neynarClient.publishCast(
+        process.env.SIGNER_UUID!,
+        "",
+        {
+          replyTo: cast.hash,
+          embeds: [
+            {
+              url: `${process.env.APP_URL}/api/frame-setup/${channelId}`,
+            }
+          ]
+        }
+      );
+      if (castResponse.hash) {
+        console.log("call end: hook-setup");
+        return c.json({ message: 'Cast sent.' }, 200);
+      } else {
+        return c.json({ message: 'Error casting message.' }, 200);
+      }
 
-//     } else {
-//       console.log("call end: hook-setup");
-//       return c.json({ message: "You are not the owner of this channel." }, 200);
-//     }
-//   } catch (e) {
-//     console.error("Error:", e);
-//     return c.json({ message: "Error processing request." }, 200);
-//   }
+    } else {
+      console.log("call end: hook-setup");
+      return c.json({ message: "You are not the owner of this channel." }, 200);
+    }
+  } catch (e) {
+    console.error("Error:", e);
+    return c.json({ message: "Error processing request." }, 200);
+  }
 
-// });
+});
 
 app.hono.post("/hook-validate", async (c) => {
   try {
     console.log("call start: hook-validate");
     const body = await c.req.json();
     let cast: Cast = body.data;
-    // console.log("body: ", body);
 
     if (!isSetupCast(cast.text)) {
-      let fid = cast.author.fid;
       let username = body.data.author.username;
       let castHash = body.data.hash;
-      // console.log("channelRules: ", channelRules);
       let channel = await getChannel(cast.root_parent_url!);
       let channelRules = await getChannelRules(channel?.id!);
       const userAddresses = cast.author.verified_addresses.eth_addresses;
-      // let validMembership = await getValidMembershipWithinRules(channelRules, userAddresses);
-      let validMembership = true;
+      let membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(channelRules, userAddresses);
 
-      if (validMembership) {
+      if (membershipIsValidForAtLeastOneAddress) {
         let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash);
         console.log("Cast reaction successful:", castReactionResponse);
         return c.json({ message: "Cast reaction successful!" });
       } else {
+        // Determine if the user has no NFT or if the user has an NFT but it's expired
+
+        // Has one of the addresses an expired membership?
+
+
         let message = `Hey @${username}, it looks like you don't have a subscription yet. Let me help you with that.`;
         const castResponse = await neynarClient.publishCast(
           process.env.SIGNER_UUID!,
@@ -120,7 +116,7 @@ app.hono.post("/hook-validate", async (c) => {
           {
             embeds: [
               {
-                url: `${APP_URL}/api/9c3d6b6c-d3d1-424e-a5f0-b2489a68fbed`, // Get at https://app.unlock-protocol.com/locks/checkout-url
+                url: `${process.env.APP_URL}/api/9c3d6b6c-d3d1-424e-a5f0-b2489a68fbed`, // Get at https://app.unlock-protocol.com/locks/checkout-url
               }]
           }
         );
@@ -145,62 +141,32 @@ app.hono.post("/hook-validate", async (c) => {
 app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   console.log("call start: frame-setup/:channelId");
   const { buttonValue, inputText, status, req } = c;
-  // console.log("req: ", req);
   let ethAddresses: string[] = [];
   let interactorIsChannelLead = false;
-  // try {
-  // const payload = await req.json();
-  // console.log("body: ", payload);
-  // let cast: Cast = payload.data;
-  // console.log("cast: ", cast);
-  // ethAddresses = cast.author.verified_addresses.eth_addresses;
-  //   console.log("ethAddresses: ", ethAddresses);
-  // } catch (error) {
-  //   console.log("error: ", error);
-  // }
   if (status == "response") {
-    const payload = await req.json();
+    console.log("status: response");
     // Validate the frame action response and obtain ethAddresses and channelId
+    const payload = await req.json();
+    console.log("payload: ", payload);
     const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-    console.log("frameActionResponse: ", frameActionResponse);
     if (frameActionResponse.valid) {
       ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
       let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
-      let frameChannelId = channel?.id!;
       let interactor = frameActionResponse.action.signer?.client?.fid;
       let channelLead = channel?.lead?.fid;
       if (channelLead == interactor) {
         interactorIsChannelLead = true;
       }
+      console.log("Frame action response is valid.")
+    } else {
+      console.log("Frame action response is invalid.")
     }
   }
 
-
   let channelId = req.param('channelId');
-  // console.log("channelId: ", channelId);
   let dynamicIntents: any[] = [];
   let textFrame = "";
   let conditions = 0;
-
-
-
-  // Validate the frame action response and obtain ethAddresses and channelId
-  // const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-  // console.log("frameActionResponse: ", frameActionResponse);
-  // if (frameActionResponse.valid) {
-  //   ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
-  //   let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
-  //   let frameChannelId = channel?.id!;
-  //   let interactor = frameActionResponse.action.signer?.client?.fid;
-  //   let channelLead = channel?.lead?.fid;
-  //   if (channelLead == interactor) {
-  //     interactorIsChannelLead = true;
-  //   }
-  // }
-
-  // ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
-  // console.log("buttonValue: ", buttonValue);
-
 
   // Get the channel access rules
   let channelRules = await getChannelRules(channelId!);
@@ -220,7 +186,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         <Button value='add'>Add</Button>
       ];
     } else {
-      if (conditions >= ACCESS_RULES_LIMIT) {
+      if (conditions >= Number(process.env.ACCESS_RULES_LIMIT)) {
         dynamicIntents = [
           <Button value='remove'>Remove</Button>
         ];
@@ -240,7 +206,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
       if (buttonValue == "add" || buttonValue == "remove") {
         console.log("step: add or remove");
         if (buttonValue == "add") {
-          let firstPage = 0;
           textFrame = `To add a rule on channel ${channelId}, start by selecting the network the contract is deployed on.`;
           dynamicIntents = [
             <Button value='base'>Base</Button>,
@@ -398,7 +363,7 @@ const shortenAddress = (address: string): string => {
 
 function isSetupCast(castText: string): boolean {
   // Conditional text has been set in the hook, but it's also validated here
-  return castText.trim().toLowerCase() === BOT_SETUP_TEXT!.toLowerCase(); // Case-insensitive check
+  return castText.trim().toLowerCase() === process.env.BOT_SETUP_TEXT!.toLowerCase(); // Case-insensitive check
 }
 
 function getLastPartOfUrl(url: string) {
@@ -481,16 +446,8 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
 }
 
 const getChannel = async (rootParentUrl: string): Promise<Channel | null> => {
-  console.log("getChannel");
-  console.log("getChannel - rootParentUrl: ", rootParentUrl);
-  let channelId = getLastPartOfUrl(rootParentUrl);
-  console.log("getChannel - channelId: ", channelId);
-  // let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([rootParentUrl], { type: ChannelType.ParentUrl })).channels;
-  let channels: Array<Channel> = (await neynarClient.searchChannels(channelId)).channels;
-  console.log("getChannel - after");
-
+  let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([rootParentUrl], { type: ChannelType.ParentUrl })).channels;
   if (channels && channels.length > 0) {
-    console.log("getChannel - channels[0]: ", channels[0]);
     return channels[0];
   } else {
     return null;

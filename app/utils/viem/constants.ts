@@ -57,3 +57,29 @@ export const getLockIsValid = async (userAddress: string, lockAddress: string, n
   });
   return isValid;
 };
+
+export const doAddressesHaveValidMembershipInRules = async (
+  channelRules: {
+    id: number,
+    channel_id: string,
+    operator: string,
+    rule_behavior: string,
+    network: string,
+    contract_address: string,
+    created_at: string,
+    updated_at: string | null
+  }[],
+  userAddresses: string[]
+) => {
+  const membershipPromises = userAddresses.flatMap(userAddress =>
+    channelRules.map(rule => getLockIsValid(rule.contract_address, userAddress, rule.network))
+  );
+
+  try {
+    await Promise.any(membershipPromises); // Wait for at least ONE to resolve
+    return true; // At least one membership is valid
+  } catch (error) {
+    // If ALL promises are rejected (no valid membership found)
+    return false;
+  }
+};
