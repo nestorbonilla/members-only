@@ -9,12 +9,10 @@ import { serveStatic } from 'frog/serve-static';
 import neynarClient, { getEipChainId } from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
 import { Address } from 'viem';
-import { getNetworkNumber, getUnlockProxyAddress } from '@/app/utils/unlock/membership';
 import { deleteChannelRule, doesRuleWithContractExist, getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getContractsDeployed } from '@/app/utils/alchemy/constants';
 import { doAddressesHaveValidMembershipInRules, getLockName, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
-import test from 'node:test';
 
 const app = new Frog({
   assetsPath: '/',
@@ -437,6 +435,8 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         console.log("network selection: start");
         // Step 3: Show the contract addresses deployed on the selected network
         let network = buttonValue;
+        console.log("networks => network: ", network);
+        console.log("networks => ethAddresses: ", ethAddresses);
         const contractAddresses: string[] = (
           await Promise.all(
             ethAddresses.map(async (ethAddress) =>
@@ -444,6 +444,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
             )
           )
         ).flat();
+        console.log("networks => contractAddresses: ", contractAddresses);
 
         if (contractAddresses.length > 0) {
           let lockMetadata = await getLockName(contractAddresses[0], network);
@@ -765,8 +766,6 @@ function getLastPartOfUrl(url: string) {
   const parts = urlObj.pathname.split('/');
   return parts[parts.length - 1];
 }
-
-
 
 const getChannel = async (rootParentUrl: string): Promise<Channel | null> => {
   // let channelId = getLastPartOfUrl(rootParentUrl);
