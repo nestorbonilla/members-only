@@ -309,6 +309,15 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   }
   console.log("call end: frame-setup-channel/:channelId");
   return c.res({
+    image: `${process.env.APP_URL}/api/frame-setup-image/${textFrame}`,
+    intents: dynamicIntents,
+  })
+});
+
+app.image('/frame-setup-image/:customText', (c) => {
+  const { customText } = c.req.param();
+  console.log('/frame-setup-image/:customText', customText);
+  return c.res({
     image: (
       <Box
         grow
@@ -318,21 +327,19 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         borderStyle="solid"
         borderRadius="8"
         borderWidth="4"
-        borderColor={'yellow'}
+        borderColor='yellow'
       >
         <VStack gap="4">
           <Heading color={'black'}>@membersonly Channel Bot</Heading>
           <Spacer size="20" />
           <Text color={'black'} size="20">
-            {textFrame}
+            {customText}
           </Text>
         </VStack>
       </Box>
     ),
-    intents: dynamicIntents,
-  })
+  });
 });
-
 //_______________________________________________________________________________________________________________________
 // Utils
 

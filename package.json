@@ -1,5 +1,6 @@
 {
   "name": "members-only",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "scripts": {
