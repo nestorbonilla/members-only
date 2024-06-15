@@ -143,6 +143,15 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   const { buttonValue, inputText, status, req } = c;
   let ethAddresses: string[] = [];
   let interactorIsChannelLead = false;
+  let channelId = req.param('channelId');
+  let textFrame = "";
+  let dynamicIntents: any[] = [];
+  let conditions = 0;
+
+  // Get the channel access rules
+  let channelRules = await getChannelRules(channelId!);
+  conditions = channelRules?.length ?? 0;
+
   if (status == "response") {
     console.log("frame-setup/:channelId status: ", status);
     // Validate the frame action response and obtain ethAddresses and channelId
@@ -154,8 +163,9 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
       console.log("frame-setup/:channelId frameActionResponse is valid.");
       console.log("frame-setup/:channelId frameActionResponse: ", frameActionResponse);
       ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
+      console.log("frame-setup/:channelId ethAddresses: ", ethAddresses);
       let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
-      let interactor = frameActionResponse.action.signer?.client?.fid;
+      let interactor = frameActionResponse.action.interactor?.fid;
       let channelLead = channel?.lead?.fid;
       if (channelLead == interactor) {
         interactorIsChannelLead = true;
@@ -166,15 +176,10 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
     }
   }
 
-  let channelId = req.param('channelId');
-  let dynamicIntents: any[] = [];
-  let textFrame = "";
-  let conditions = 0;
+
 
   console.log("frame-setup/:channelId before getChannelRules");
-  // Get the channel access rules
-  let channelRules = await getChannelRules(channelId!);
-  conditions = channelRules!.length;
+
 
   console.log("frame-setup/:channelId before status == initial || status == response && buttonValue == done");
   if (status == "initial" || (status == "response" && buttonValue == "done")) {
@@ -202,10 +207,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         ];
       }
     }
-  }
-
-  console.log("frame-setup/:channelId before 2nd status == response");
-  if (status == "response") {
+  } else if (status == "response") {
     if (interactorIsChannelLead) {
       // Step 2: Show action to achieve, either add or remove a rule
       if (buttonValue == "add" || buttonValue == "remove") {
