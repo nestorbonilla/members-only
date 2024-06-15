@@ -34,13 +34,66 @@ const neynarMiddleware = neynar({
 // Uncomment to use Edge Runtime
 // export const runtime = 'edge'
 
+enum ApiRoute {
+  HOOK_SETUP = "HOOK-SETUP",
+  HOOK_VALIDATE = "HOOK-VALIDATE",
+  FRAME_SETUP = "FRAME-SETUP/:CHANNELID",
+}
+
+enum HookSetupResult {
+  CAST_SUCCESS,
+  CAST_ERROR,
+  INVALID_AUTHOR,
+  UNEXPECTED_ERROR,
+  ROUTE_ERROR,
+}
+
+enum HookValidateResult {
+  CAST_REACTION_SUCCESS,
+  CAST_REACTION_ERROR,
+  CAST_FRAME_SUCCESS,
+  CAST_FRAME_ERROR,
+  SETUP_TEXT,
+  ROUTE_ERROR,
+}
+
+enum FrameSetupResult {
+  FRAME_ACTION_VALID,
+  FRAME_ACTION_INVALID,
+  CAST_FRAME_SUCCESS,
+  CAST_FRAME_ERROR,
+  SETUP_TEXT,
+  ROUTE_ERROR,
+}
+
+const statusMessage = {
+  [ApiRoute.HOOK_SETUP]: {
+    [HookSetupResult.CAST_SUCCESS]: `${ApiRoute.HOOK_SETUP} => CAST SENT SUCCESSFULLY`,
+    [HookSetupResult.CAST_ERROR]: `${ApiRoute.HOOK_SETUP} => FAILED TO PUBLISH CAST`,
+    [HookSetupResult.INVALID_AUTHOR]: `${ApiRoute.HOOK_SETUP} => CAST AUTHOR IS NOT CHANNEL OWNER`,
+    [HookSetupResult.UNEXPECTED_ERROR]: `${ApiRoute.HOOK_SETUP} => POINT SHOULD NOT BE REACHED, CHECK NEYNAR HOOK`,
+    [HookSetupResult.ROUTE_ERROR]: `${ApiRoute.HOOK_SETUP} => ROUTE ERROR`,
+  },
+  [ApiRoute.HOOK_VALIDATE]: {
+    [HookValidateResult.CAST_REACTION_SUCCESS]: `${ApiRoute.HOOK_VALIDATE} => CAST REACTION SENT SUCCESSFULLY`,
+    [HookValidateResult.CAST_REACTION_ERROR]: `${ApiRoute.HOOK_VALIDATE} => FAILED TO SEND CAST REACTION`,
+    [HookValidateResult.CAST_FRAME_SUCCESS]: `${ApiRoute.HOOK_VALIDATE} => CAST AUTHOR IS NOT CHANNEL OWNER`,
+    [HookValidateResult.CAST_FRAME_ERROR]: `${ApiRoute.HOOK_VALIDATE} => POINT SHOULD NOT BE REACHED, CHECK NEYNAR HOOK`,
+    [HookValidateResult.SETUP_TEXT]: `${ApiRoute.HOOK_VALIDATE} => TEXT IS TO SETUP THE CHANNEL, NOT TO VALIDATE MEMBERSHIP`,
+    [HookValidateResult.ROUTE_ERROR]: `${ApiRoute.HOOK_VALIDATE} => ROUTE ERROR`,
+  },
+  [ApiRoute.FRAME_SETUP]: {
+    [FrameSetupResult.FRAME_ACTION_VALID]: `${ApiRoute.FRAME_SETUP} => FRAME ACTION IS VALID`,
+    [FrameSetupResult.FRAME_ACTION_INVALID]: `${ApiRoute.FRAME_SETUP} => FRAME ACTION IS INVALID`,
+  },
+};
+
 app.hono.post("/hook-setup", async (c) => {
   try {
     console.log("call start: hook-setup");
 
     const body = await c.req.json();
     let cast: Cast = body.data;
-    console.log("cast text: ", cast.text);
 
     // 1. Validate the cast author is the owner of the channel
     // 1.1 Get the channel owner
@@ -55,45 +108,46 @@ app.hono.post("/hook-setup", async (c) => {
     // Probably second validation will be removed and just validated on the hook
     let castText = cast.text;
 
-    if (channelLead == castAuthor && castText == process.env.BOT_SETUP_TEXT) {
-      console.log("url to embed on reply cast: ", `${process.env.APP_URL}/api/frame-setup/${channelId}`);
-      const castResponse = await neynarClient.publishCast(
-        process.env.SIGNER_UUID!,
-        "",
-        {
-          replyTo: cast.hash,
-          embeds: [
-            {
-              url: `${process.env.APP_URL}/api/frame-setup/${channelId}`,
-            }
-          ]
+    if (channelLead == castAuthor) {
+      if (castText == process.env.BOT_SETUP_TEXT) {
+        const castResponse = await neynarClient.publishCast(
+          process.env.SIGNER_UUID!,
+          "",
+          {
+            replyTo: cast.hash,
+            embeds: [
+              {
+                url: `${process.env.APP_URL}/api/frame-setup/${channelId}`,
+              }
+            ]
+          }
+        );
+        if (castResponse.hash) {
+          return c.json({ message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.CAST_SUCCESS] });
+        } else {
+          return c.json({ message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.CAST_ERROR] });
         }
-      );
-      if (castResponse.hash) {
-        console.log("call end: hook-setup");
-        return c.json({ message: 'Cast sent.' }, 200);
       } else {
-        return c.json({ message: 'Error casting message.' }, 200);
+        return c.json({ message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.UNEXPECTED_ERROR] });
       }
-
     } else {
-      console.log("call end: hook-setup");
-      return c.json({ message: "You are not the owner of this channel." }, 200);
+      return c.json({ message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.INVALID_AUTHOR] });
     }
   } catch (e) {
-    console.error("Error:", e);
-    return c.json({ message: "Error processing request." }, 200);
+    return c.json({ message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.ROUTE_ERROR] });
   }
-
 });
 
 app.hono.post("/hook-validate", async (c) => {
   try {
     console.log("call start: hook-validate");
+
     const body = await c.req.json();
     let cast: Cast = body.data;
 
-    if (!isSetupCast(cast.text)) {
+    if (isSetupCast(cast.text)) {
+      return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.SETUP_TEXT] });
+    } else {
       let username = body.data.author.username;
       let castHash = body.data.hash;
       let channel = await getChannel(cast.root_parent_url!);
@@ -103,8 +157,11 @@ app.hono.post("/hook-validate", async (c) => {
 
       if (membershipIsValidForAtLeastOneAddress) {
         let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash);
-        console.log("Cast reaction successful:", castReactionResponse);
-        return c.json({ message: "Cast reaction successful!" });
+        if (castReactionResponse.success) {
+          return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.CAST_REACTION_SUCCESS] });
+        } else {
+          return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.CAST_REACTION_ERROR] });
+        }
       } else {
         // Determine if the user has no NFT or if the user has an NFT but it's expired
         let totalKeysCount = await getLockTotalKeys(userAddresses[0], channelRules[0].contract_address, channelRules[0].network);
@@ -125,26 +182,22 @@ app.hono.post("/hook-validate", async (c) => {
               }]
           }
         );
-        if (!castResponse.hash) {
-          return c.json({ message: 'Error casting message.' }, 500);
-        }
-        //   const castData = (await castResponse).text;
-        //   console.log("Cast successful:", castData);
         console.log("call end: hook-validate");
-        return c.json({ message: "Cast successful!" });
-
+        if (castResponse.hash) {
+          return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.CAST_FRAME_SUCCESS] });
+        } else {
+          return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.CAST_FRAME_ERROR] });
+        }
       }
-    } else {
-      return c.json({ message: "Setup cast." }, 200);
     }
   } catch (e) {
-    console.error("Error:", e);
-    return c.json({ message: "Error processing request." }, 500);
+    return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.ROUTE_ERROR] });
   }
 });
 
 app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   console.log("call start: frame-setup/:channelId");
+  console.log("c: ", process.env.NODE_ENV === 'production');
   const { buttonValue, inputText, status, req } = c;
   let ethAddresses: string[] = [];
   let interactorIsChannelLead = false;
@@ -160,6 +213,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   if (status == "response") {
     // Validate the frame action response and obtain ethAddresses and channelId
     const payload = await req.json();
+    console.log("payload: ", payload);
     const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
     if (frameActionResponse.valid) {
       ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
@@ -169,9 +223,9 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
       if (channelLead == interactor) {
         interactorIsChannelLead = true;
       }
-      console.log("Frame action response is valid.")
+      console.log(statusMessage[ApiRoute.FRAME_SETUP][FrameSetupResult.FRAME_ACTION_VALID]);
     } else {
-      console.log("Frame action response is invalid.")
+      console.log(statusMessage[ApiRoute.FRAME_SETUP][FrameSetupResult.FRAME_ACTION_INVALID]);
     }
   }
 
