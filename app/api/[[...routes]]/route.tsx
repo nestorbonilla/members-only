@@ -440,7 +440,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         const contractAddresses: string[] = (
           await Promise.all(
             ethAddresses.map(async (ethAddress) =>
-              getContractsDeployed(ethAddress, network!)
+              getContractsDeployed(ethAddress, network)
             )
           )
         ).flat();
