@@ -13,8 +13,6 @@ const getClient = (network: string) => {
 
 const getViemNetwork = (network: string) => {
   switch (network) {
-    case "ethereum":
-      return mainnet;
     case "base":
       return base;
     case "optimism":
@@ -39,12 +37,18 @@ export const getMembersOnlyReferralFee = async (contractAddress: string, network
 
 export const getLockName = async (lockAddress: string, network: string): Promise<any> => {
   let client = getClient(network);
-  const name = await client.readContract({
-    address: lockAddress as `0x${string}`,
-    abi: contracts.PublicLockV14.abi,
-    functionName: 'name',
-  });
-  return name;
+  let lockName = "";
+  try {
+    let readContractResult = await client.readContract({
+      address: lockAddress as `0x${string}`,
+      abi: contracts.PublicLockV14.abi,
+      functionName: 'name',
+    });
+    lockName = readContractResult!.toString();
+  } catch (error) {
+    console.log('Contract address not a Lock contract.');
+  }
+  return lockName;
 };
 
 export const getLockIsValid = async (userAddress: string, lockAddress: string, network: string): Promise<any> => {
