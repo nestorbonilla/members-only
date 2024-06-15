@@ -40,7 +40,7 @@ export const getLockMetadata = async (lockAddress: string, network: string) => {
   return lockMetadata;
 }
 
-const getNetworkNumber = (network: string) => {
+export const getNetworkNumber = (network: string) => {
   switch (network) {
     case "ethereum":
       return networks['1'].id;

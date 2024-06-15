@@ -9,10 +9,11 @@ import { serveStatic } from 'frog/serve-static';
 import neynarClient from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
 import { Address } from 'viem';
-import { getUnlockProxyAddress } from '@/app/utils/unlock/membership';
+import { getNetworkNumber, getUnlockProxyAddress } from '@/app/utils/unlock/membership';
 import { getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getAlchemyRpc } from '@/app/utils/alchemy/constants';
 import { doAddressesHaveValidMembershipInRules, getLockName, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
+import { contracts } from '@unlock-protocol/contracts';
 
 const app = new Frog({
   assetsPath: '/',
@@ -348,6 +349,19 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
       </div>
     ),
     intents: dynamicIntents,
+  });
+});
+
+app.transaction('/set-referrer-fee/:lockAddress/:feeBasisPoint', (c) => {
+  const { req } = c;
+  let lockAddress = req.param('lockAddress');
+  let feeBasisPoint = req.param('feeBasisPoint');
+  return c.contract({
+    abi: contracts.PublicLockV14.abi,
+    chainId: 'eip155:8453',
+    functionName: 'setReferrerFee',
+    args: [process.env.MO_ADDRESS, feeBasisPoint],
+    to: lockAddress as `0x${string}`
   });
 });
 
