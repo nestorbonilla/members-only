@@ -140,33 +140,6 @@ app.hono.post("/hook-validate", async (c) => {
   }
 });
 
-app.image('/image-setup/:descriptionText', neynarMiddleware, (c) => {
-  const { req } = c;
-  let descriptionText = req.param('descriptionText');
-  return c.res({
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor={'yellow'}
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly Channel Bot</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            {descriptionText}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
-
 app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   console.log("call start: frame-setup/:channelId");
   const { buttonValue, inputText, status, req } = c;
