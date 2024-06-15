@@ -1,7 +1,6 @@
 import { createPublicClient, http } from 'viem';
 import { mainnet, base, optimism, arbitrum } from 'viem/chains';
 import { contracts } from '@unlock-protocol/contracts';
-import { getAlchemyRpc } from "../alchemy/constants";
 
 const getClient = (network: string) => {
   let client = createPublicClient({
@@ -55,10 +54,12 @@ export const getLockIsValid = async (userAddress: string, lockAddress: string, n
     functionName: 'getHasValidKey',
     args: [userAddress],
   });
+  console.log(`Does ${userAddress} have a valid membership in ${lockAddress} deployed on ${network}? ${isValid}`);
   return isValid;
 };
 
 export const doAddressesHaveValidMembershipInRules = async (
+  userAddresses: string[],
   channelRules: {
     id: number,
     channel_id: string,
@@ -68,11 +69,10 @@ export const doAddressesHaveValidMembershipInRules = async (
     contract_address: string,
     created_at: string,
     updated_at: string | null
-  }[],
-  userAddresses: string[]
+  }[]
 ) => {
   const membershipPromises = userAddresses.flatMap(userAddress =>
-    channelRules.map(rule => getLockIsValid(rule.contract_address, userAddress, rule.network))
+    channelRules.map(rule => getLockIsValid(userAddress, rule.contract_address, rule.network))
   );
 
   try {

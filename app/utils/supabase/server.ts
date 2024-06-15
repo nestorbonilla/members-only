@@ -47,7 +47,6 @@ export const getChannelRules = async (channelId: string) => {
     console.error('Error fetching channel access rules:', error);
     throw error; // Rethrow the error for handling in the API route
   }
-  console.log('Channel access rules:', data);
   return data;
 }
 

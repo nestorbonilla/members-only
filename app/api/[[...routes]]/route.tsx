@@ -1,8 +1,9 @@
 /** @jsxImportSource frog/jsx */
 
 import { Button, Frog, TextInput } from 'frog';
+import { Box, Divider, Heading, Text, VStack, Rows, Row, Spacer, vars } from '@/app/utils/frog/ui';
 import { devtools } from 'frog/dev';
-import { neynar, type NeynarVariables } from "frog/middlewares";
+import { neynar, type NeynarVariables } from 'frog/middlewares';
 import { handle } from 'frog/next';
 import { serveStatic } from 'frog/serve-static';
 import neynarClient from '@/app/utils/neynar/client';
@@ -16,6 +17,7 @@ import { doAddressesHaveValidMembershipInRules, getLockName, getMembersOnlyRefer
 const app = new Frog({
   assetsPath: '/',
   basePath: '/api',
+  ui: { vars },
   origin: process.env.APP_URL,
   imageOptions: {
     format: "png",
@@ -97,7 +99,7 @@ app.hono.post("/hook-validate", async (c) => {
       let channel = await getChannel(cast.root_parent_url!);
       let channelRules = await getChannelRules(channel?.id!);
       const userAddresses = cast.author.verified_addresses.eth_addresses;
-      let membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(channelRules, userAddresses);
+      let membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(userAddresses, channelRules);
 
       if (membershipIsValidForAtLeastOneAddress) {
         let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash);
@@ -138,6 +140,33 @@ app.hono.post("/hook-validate", async (c) => {
   }
 });
 
+app.image('/image-setup/:descriptionText', neynarMiddleware, (c) => {
+  const { req } = c;
+  let descriptionText = req.param('descriptionText');
+  return c.res({
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor={'yellow'}
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly Channel Bot</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            {descriptionText}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
 app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   console.log("call start: frame-setup/:channelId");
   const { buttonValue, inputText, status, req } = c;
@@ -153,17 +182,11 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   conditions = channelRules?.length ?? 0;
 
   if (status == "response") {
-    console.log("frame-setup/:channelId status: ", status);
     // Validate the frame action response and obtain ethAddresses and channelId
     const payload = await req.json();
-    // console.log("frame-setup/:channelId payload: ", payload);
     const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-    console.log("frame-setup/:channelId pass");
     if (frameActionResponse.valid) {
-      console.log("frame-setup/:channelId frameActionResponse is valid.");
-      console.log("frame-setup/:channelId frameActionResponse: ", frameActionResponse);
       ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
-      console.log("frame-setup/:channelId ethAddresses: ", ethAddresses);
       let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
       let interactor = frameActionResponse.action.interactor?.fid;
       let channelLead = channel?.lead?.fid;
@@ -176,21 +199,15 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
     }
   }
 
-
-
-  console.log("frame-setup/:channelId before getChannelRules");
-
-
-  console.log("frame-setup/:channelId before status == initial || status == response && buttonValue == done");
   if (status == "initial" || (status == "response" && buttonValue == "done")) {
 
     // Step 1: Show the number of rules on the channel
-    console.log("step: initial");
     let lockMetadata;
     if (channelRules?.length! > 0) {
       lockMetadata = await getLockName(channelRules![0].contract_address, channelRules![0].network);
     }
-    textFrame = `${channelId} channel has ${conditions == 0 ? "no" : conditions} rules. ${lockMetadata}`;
+    textFrame = `${channelId} channel has ${conditions == 0 ? "no" : conditions} ${(conditions < 2 ? "rule" : "rules")}.`;
+
     if (channelRules?.length! == 0) {
       dynamicIntents = [
         <Button value='add'>Add</Button>
@@ -244,7 +261,9 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
           // do aditional logic here
         }
-        textFrame = `${network}: ${shortenAddress(contractAddresses[0])}`;
+        // textFrame = `${network}: ${shortenAddress(contractAddresses[0])}`;
+        let lockMetadata = await getLockName(channelRules![0].contract_address, channelRules![0].network);
+        textFrame = `${network}: ${lockMetadata}`;
 
         dynamicIntents = [
           <TextInput placeholder="Contract Address..." />,
@@ -265,7 +284,9 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         //   // do aditional logic here
         // }
 
-        textFrame = `${network}: ${contractAddresses[currentPage]}`;
+        // textFrame = `${network}: ${contractAddresses[currentPage]}`;
+        let lockMetadata = await getLockName(channelRules![currentPage].contract_address, channelRules![currentPage].network);
+        textFrame = `${network}: ${lockMetadata}`;
 
         const prevBtn = (index: number) => {
           if (contractAddresses.length > 0 && index > 0) {
@@ -315,44 +336,36 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   }
   console.log("call end: frame-setup-channel/:channelId");
   return c.res({
-    image: (
-      <div
-        style={{
-          alignItems: 'center',
-          background: 'black',
-          backgroundSize: '100% 100%',
-          display: 'flex',
-          flexDirection: 'column',
-          flexWrap: 'nowrap',
-          height: '100%',
-          justifyContent: 'center',
-          textAlign: 'center',
-          width: '100%',
-        }}
-      >
-        <div
-          style={{
-            color: 'white',
-            fontSize: 60,
-            fontStyle: 'normal',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.4,
-            marginTop: 30,
-            padding: '0 120px',
-            whiteSpace: 'pre-wrap',
-            display: 'flex',
-          }}
-        >
-          {textFrame}
-        </div>
-      </div>
-    ),
+    image: getFrameImage(textFrame),
     intents: dynamicIntents,
   })
 });
 
 //_______________________________________________________________________________________________________________________
 // Utils
+
+const getFrameImage = (text: string) => {
+  return (
+    <Box
+      grow
+      alignHorizontal="center"
+      backgroundColor="background"
+      padding="32"
+      borderStyle="solid"
+      borderRadius="8"
+      borderWidth="4"
+      borderColor={'yellow'}
+    >
+      <VStack gap="4">
+        <Heading color={'black'}>@membersonly Channel Bot</Heading>
+        <Spacer size="20" />
+        <Text color={'black'} size="20">
+          {text}
+        </Text>
+      </VStack>
+    </Box>
+  );
+}
 
 const getDistinctAddresses = async (fid: string): Promise<Address[]> => {
   let fetchedUsers: any = await neynarClient.fetchBulkUsers([Number(fid)]);
@@ -436,7 +449,6 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
       })
     );
     const allReceipts = await Promise.all(allReceiptPromises);
-    // console.log("allReceipts: ", allReceipts);
     const contractAddresses = allReceipts.flatMap((receipt) => {
       if (receipt.logs && receipt.logs.length > 0) {
         const firstLog = receipt.logs[0]; // There could be logs that have a different address, but I'm assuming the first one is the contract address
@@ -453,10 +465,9 @@ const getContractsDeployed = async (address: string, network: string): Promise<s
 }
 
 const getChannel = async (rootParentUrl: string): Promise<Channel | null> => {
-  let channelId = getLastPartOfUrl(rootParentUrl);
-  console.log("getChannel - channelId: ", channelId);
-  // let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([rootParentUrl], { type: ChannelType.ParentUrl })).channels;
-  let channels: Array<Channel> = (await neynarClient.searchChannels(channelId)).channels;
+  // let channelId = getLastPartOfUrl(rootParentUrl);
+  // let channels: Array<Channel> = (await neynarClient.searchChannels(channelId)).channels;
+  let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([rootParentUrl], { type: ChannelType.ParentUrl })).channels;
   if (channels && channels.length > 0) {
     return channels[0];
   } else {
