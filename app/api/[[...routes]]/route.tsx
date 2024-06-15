@@ -164,22 +164,24 @@ app.hono.post("/hook-validate", async (c) => {
           return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.CAST_REACTION_ERROR] });
         }
       } else {
+        let textCast = '';
         // Determine if the user has no NFT or if the user has an NFT but it's expired
         let totalKeysCount = await getLockTotalKeys(userAddresses[0], channelRules[0].contract_address, channelRules[0].network);
         if (totalKeysCount == 0) {
           // if no keys then no nft, so suggest cast owner to buy a new key of the lock
+          textCast = `Hey @${username}, it looks like you don't have a key to access ${channel?.id} channel yet. Let me help you with that.`;
         } else {
           // One or more keys are expired, so let's renew the first we found
+          textCast = `Hey @${username}, it looks like you have an expired key to access ${channel?.id} channel. Let me help you with that.`;
           let isOwnerOfToken = await getTokenOfOwnerByIndex(userAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
         }
-        let message = `Hey @${username}, it looks like you don't have a subscription yet. Let me help you with that.`;
         const castResponse = await neynarClient.publishCast(
           process.env.SIGNER_UUID!,
-          message,
+          textCast,
           {
             embeds: [
               {
-                url: `${process.env.APP_URL}/api/9c3d6b6c-d3d1-424e-a5f0-b2489a68fbed`, // Get at https://app.unlock-protocol.com/locks/checkout-url
+                url: `${process.env.APP_URL}/api/frame-purchase/${channel?.id}`, // Get at https://app.unlock-protocol.com/locks/checkout-url
               }]
           }
         );
@@ -194,6 +196,123 @@ app.hono.post("/hook-validate", async (c) => {
   } catch (e) {
     return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.ROUTE_ERROR] });
   }
+});
+
+app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
+  console.log("call start: frame-purchase/:channelId");
+  const { buttonValue, inputText, status, req } = c;
+  let ethAddresses: string[] = [];
+  let channelId = req.param('channelId');
+  let textFrame = "";
+  let dynamicIntents: any[] = [];
+  let conditions = 0;
+  let membershipIsValidForAtLeastOneAddress = true;
+  let totalKeysCount = 0;
+
+  // Get the channel access rules
+  let channelRules = await getChannelRules(channelId!);
+
+  if (status == "initial" || (status == "response" && buttonValue == "done")) {
+
+    textFrame = `To purchase or renew your key to access ${channelId} channel, let's start by veryfing some data.`;
+    // Step 1: Show the number of rules on the channel
+    let lockMetadata = '';
+    if (channelRules?.length! > 0) {
+      lockMetadata = await getLockName(channelRules![0].contract_address, channelRules![0].network);
+    }
+    dynamicIntents = [
+      <Button value='verify'>verify</Button>
+    ];
+
+  } else if (status == "response") {
+    const payload = await req.json();
+    if (process.env.NODE_ENV === 'production') {
+      const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+      if (frameActionResponse.valid) {
+        ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
+        let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
+        console.log(statusMessage[ApiRoute.FRAME_SETUP][FrameSetupResult.FRAME_ACTION_VALID]);
+      } else {
+        console.log(statusMessage[ApiRoute.FRAME_SETUP][FrameSetupResult.FRAME_ACTION_INVALID]);
+      }
+    } else {
+      // For local development
+      ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
+    }
+
+    // Verify there's at least one rule
+    if (channelRules.length > 0) {
+      // Verify the user doesn't have a valid membership
+      membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(ethAddresses, channelRules);
+      if (membershipIsValidForAtLeastOneAddress) {
+        textFrame = `You already have a valid key to access ${channelId} channel. So just keep casting on your favorite channel!`;
+        dynamicIntents = [
+          <Button value='done'>complete</Button>
+        ];
+      } else {
+        // Verify the user doesn't have an expired membership
+        let keyCounts = await Promise.all(
+          ethAddresses.map((ethAddress) =>
+            getLockTotalKeys(ethAddress, channelRules[0].contract_address, channelRules[0].network)
+          )
+        );
+        let totalKeysCount = keyCounts.reduce((sum, count) => sum + Number(count), 0);
+        if (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0) {
+          // Then the user has no keys, so let's suggest to buy a new key
+          textFrame = `You don't have a key to access ${channelId} channel. Let's mint one:`;
+          dynamicIntents = [
+            <Button value='done'>back</Button>,
+            <Button.Transaction target='/action-purchase/:lockAddress'>buy</Button.Transaction>
+          ];
+        } else {
+          // One or more keys are expired, so let's renew the first we found
+          // let isOwnerOfToken = await getTokenOfOwnerByIndex(ethAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
+          textFrame = `You have an expired key. Let's renew it:`;
+          dynamicIntents = [
+            <Button value='done'>back</Button>,
+            <Button.Transaction target='/action-renew/:lockAddress'>renew</Button.Transaction>
+          ];
+        }
+      }
+    }
+  }
+
+  return c.res({
+    image: (
+      <div
+        style={{
+          alignItems: 'center',
+          background: 'black',
+          backgroundSize: '100% 100%',
+          display: 'flex',
+          flexDirection: 'column',
+          flexWrap: 'nowrap',
+          height: '100%',
+          justifyContent: 'center',
+          textAlign: 'center',
+          width: '100%',
+        }}
+      >
+        <div
+          style={{
+            color: 'white',
+            fontSize: 60,
+            fontStyle: 'normal',
+            letterSpacing: '-0.025em',
+            lineHeight: 1.4,
+            marginTop: 30,
+            padding: '0 120px',
+            whiteSpace: 'pre-wrap',
+            display: 'flex',
+          }}
+        >
+          {textFrame}
+        </div>
+      </div>
+    ),
+    intents: dynamicIntents,
+  });
+
 });
 
 app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
