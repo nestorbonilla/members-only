@@ -6,7 +6,7 @@ import { devtools } from 'frog/dev';
 import { neynar, type NeynarVariables } from 'frog/middlewares';
 import { handle } from 'frog/next';
 import { serveStatic } from 'frog/serve-static';
-import neynarClient from '@/app/utils/neynar/client';
+import neynarClient, { getEipChainId } from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
 import { Address } from 'viem';
 import { getNetworkNumber, getUnlockProxyAddress } from '@/app/utils/unlock/membership';
@@ -38,6 +38,7 @@ const neynarMiddleware = neynar({
 enum ApiRoute {
   HOOK_SETUP = "HOOK-SETUP",
   HOOK_VALIDATE = "HOOK-VALIDATE",
+  FRAME_PURCHASE = "FRAME-PURCHASE/:CHANNELID",
   FRAME_SETUP = "FRAME-SETUP/:CHANNELID",
 }
 
@@ -67,6 +68,15 @@ enum FrameSetupResult {
   ROUTE_ERROR,
 }
 
+enum FramePurchaseResult {
+  FRAME_ACTION_VALID,
+  FRAME_ACTION_INVALID,
+  CAST_FRAME_SUCCESS,
+  CAST_FRAME_ERROR,
+  SETUP_TEXT,
+  ROUTE_ERROR,
+}
+
 const statusMessage = {
   [ApiRoute.HOOK_SETUP]: {
     [HookSetupResult.CAST_SUCCESS]: `${ApiRoute.HOOK_SETUP} => CAST SENT SUCCESSFULLY`,
@@ -86,6 +96,10 @@ const statusMessage = {
   [ApiRoute.FRAME_SETUP]: {
     [FrameSetupResult.FRAME_ACTION_VALID]: `${ApiRoute.FRAME_SETUP} => FRAME ACTION IS VALID`,
     [FrameSetupResult.FRAME_ACTION_INVALID]: `${ApiRoute.FRAME_SETUP} => FRAME ACTION IS INVALID`,
+  },
+  [ApiRoute.FRAME_PURCHASE]: {
+    [FramePurchaseResult.FRAME_ACTION_VALID]: `${ApiRoute.FRAME_PURCHASE} => FRAME ACTION IS VALID`,
+    [FramePurchaseResult.FRAME_ACTION_INVALID]: `${ApiRoute.FRAME_PURCHASE} => FRAME ACTION IS INVALID`,
   },
 };
 
@@ -231,9 +245,9 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
       if (frameActionResponse.valid) {
         ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
         let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
-        console.log(statusMessage[ApiRoute.FRAME_SETUP][FrameSetupResult.FRAME_ACTION_VALID]);
+        console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_ACTION_VALID]);
       } else {
-        console.log(statusMessage[ApiRoute.FRAME_SETUP][FrameSetupResult.FRAME_ACTION_INVALID]);
+        console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_ACTION_INVALID]);
       }
     } else {
       // For local development
@@ -262,15 +276,18 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
           textFrame = `You don't have a key to access ${channelId} channel. Let's mint one:`;
           dynamicIntents = [
             <Button value='done'>back</Button>,
-            <Button.Transaction target='/action-purchase/:lockAddress'>buy</Button.Transaction>
+            // '/tx-purchase/:lockAddress/:network'
+            <Button.Transaction target={`/tx-purchase/${channelRules[0].contract_address}/${channelRules[0].network}`}>buy</Button.Transaction>
           ];
         } else {
           // One or more keys are expired, so let's renew the first we found
           // let isOwnerOfToken = await getTokenOfOwnerByIndex(ethAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
+          let tokenId = 0;
           textFrame = `You have an expired key. Let's renew it:`;
           dynamicIntents = [
             <Button value='done'>back</Button>,
-            <Button.Transaction target='/action-renew/:lockAddress'>renew</Button.Transaction>
+            // /tx-renew/:lockAddress/:network/:tokenId
+            <Button.Transaction target={`/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}`}>renew</Button.Transaction>
           ];
         }
       }
@@ -627,15 +644,46 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   });
 });
 
-app.transaction('/set-referrer-fee/:lockAddress/:feeBasisPoint', (c) => {
+app.transaction('/tx-referrer-fee/:lockAddress/:network/:feeBasisPoint', (c) => {
   const { req } = c;
   let lockAddress = req.param('lockAddress');
+  let network = req.param('network');
   let feeBasisPoint = req.param('feeBasisPoint');
   return c.contract({
     abi: contracts.PublicLockV14.abi,
-    chainId: 'eip155:8453',
+    chainId: getEipChainId(network),
     functionName: 'setReferrerFee',
     args: [process.env.MO_ADDRESS, feeBasisPoint],
+    to: lockAddress as `0x${string}`
+  });
+});
+
+app.transaction('/tx-purchase/:lockAddress/:network', (c) => {
+  const { req } = c;
+  let lockAddress = req.param('lockAddress');
+  let network = req.param('network');
+  return c.contract({
+    abi: contracts.PublicLockV14.abi,
+    chainId: getEipChainId(network),
+    functionName: 'purchase',
+    args: [],
+    to: lockAddress as `0x${string}`
+  });
+});
+
+app.transaction('/tx-renew/:lockAddress/:network/:tokenId', (c) => {
+  const { req } = c;
+  let lockAddress = req.param('lockAddress');
+  let network = req.param('network');
+  let tokenId = req.param('tokenId');
+  return c.contract({
+    abi: contracts.PublicLockV14.abi,
+    chainId: getEipChainId(network),
+    functionName: 'renewMembershipFor',
+    args: [
+      tokenId,
+      process.env.MO_ADDRESS,
+    ],
     to: lockAddress as `0x${string}`
   });
 });

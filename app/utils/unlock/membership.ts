@@ -42,8 +42,6 @@ export const getLockMetadata = async (lockAddress: string, network: string) => {
 
 export const getNetworkNumber = (network: string) => {
   switch (network) {
-    case "ethereum":
-      return networks['1'].id;
     case "base":
       return networks['8453'].id;
     case "optimism":

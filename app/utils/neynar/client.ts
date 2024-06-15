@@ -10,3 +10,17 @@ if (!process.env.NEYNAR_API_KEY) {
 const neynarClient = new NeynarAPIClient(process.env.NEYNAR_API_KEY);
 
 export default neynarClient;
+
+
+export const getEipChainId = (network: string) => {
+  switch (network) {
+    case 'base':
+      return 'eip155:8453';
+    case 'optimism':
+      return 'eip155:10';
+    case "arbitrum":
+      return 'eip155:42161';
+    default:
+      return 'eip155:8453';
+  }
+};
