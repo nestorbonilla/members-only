@@ -1,7 +1,7 @@
 /** @jsxImportSource frog/jsx */
 
 import { Button, Frog, TextInput } from 'frog';
-// import { Box, Divider, Heading, Text, VStack, Rows, Row, Spacer, vars } from '@/app/utils/frog/ui';
+import { Box, Divider, Heading, Text, VStack, Rows, Row, Spacer, vars } from '@/app/utils/frog/ui';
 import { devtools } from 'frog/dev';
 import { neynar, type NeynarVariables } from 'frog/middlewares';
 import { handle } from 'frog/next';
@@ -17,7 +17,7 @@ import { doAddressesHaveValidMembershipInRules, getLockName, getMembersOnlyRefer
 const app = new Frog({
   assetsPath: '/',
   basePath: '/api',
-  // ui: { vars },
+  ui: { vars },
   origin: process.env.APP_URL,
   imageOptions: {
     format: "png",
@@ -379,28 +379,28 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
 //_______________________________________________________________________________________________________________________
 // Utils
 
-// const getFrameImage = (text: string) => {
-//   return (
-//     <Box
-//       grow
-//       alignHorizontal="center"
-//       backgroundColor="background"
-//       padding="32"
-//       borderStyle="solid"
-//       borderRadius="8"
-//       borderWidth="4"
-//       borderColor={'yellow'}
-//     >
-//       <VStack gap="4">
-//         <Heading color={'black'}>@membersonly Channel Bot</Heading>
-//         <Spacer size="20" />
-//         <Text color={'black'} size="20">
-//           {text}
-//         </Text>
-//       </VStack>
-//     </Box>
-//   );
-// }
+const getFrameImage = (text: string) => {
+  return (
+    <Box
+      grow
+      alignHorizontal="center"
+      backgroundColor="background"
+      padding="32"
+      borderStyle="solid"
+      borderRadius="8"
+      borderWidth="4"
+      borderColor={'yellow'}
+    >
+      <VStack gap="4">
+        <Heading color={'black'}>@membersonly Channel Bot</Heading>
+        <Spacer size="20" />
+        <Text color={'black'} size="20">
+          {text}
+        </Text>
+      </VStack>
+    </Box>
+  );
+}
 
 const getDistinctAddresses = async (fid: string): Promise<Address[]> => {
   let fetchedUsers: any = await neynarClient.fetchBulkUsers([Number(fid)]);
