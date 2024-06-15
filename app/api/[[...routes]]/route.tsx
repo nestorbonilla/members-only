@@ -309,7 +309,26 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   }
   console.log("call end: frame-setup-channel/:channelId");
   return c.res({
-    image: getFrameImage(textFrame),
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor={'yellow'}
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly Channel Bot</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
     intents: dynamicIntents,
   })
 });
