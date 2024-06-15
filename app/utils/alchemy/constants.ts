@@ -13,8 +13,11 @@ export const getAlchemyRpc = (network: string): string => {
   }
 }
 
-export const getContractsDeployed = async (address: string, network: string): Promise<string[]> => {
+export const getContractsDeployed = async (userAddress: string, network: string): Promise<string[]> => {
+  console.log('getContractsDeployed => serAddress:', userAddress);
+  console.log('getContractsDeployed => network:', network);
   let alchemyRpc = getAlchemyRpc(network);
+  console.log('getContractsDeployed => alchemyRpc:', alchemyRpc);
   try {
     const txWithProxy = await fetch(alchemyRpc, {
       method: "POST",
@@ -28,7 +31,7 @@ export const getContractsDeployed = async (address: string, network: string): Pr
           {
             fromBlock: "0x0",
             toBlock: "latest",
-            fromAddress: address,
+            fromAddress: userAddress,
             toAddress: getUnlockProxyAddress(network),
             category: ["external"],
             order: "desc",
@@ -44,7 +47,7 @@ export const getContractsDeployed = async (address: string, network: string): Pr
     const txWithProxyData = await txWithProxy.json();
     if (!txWithProxyData.result || !txWithProxyData.result.transfers) {
       console.error(
-        `Error: 'result' or 'transfers' not found in alchemy_getAssetTransfers response for address: ${address}, network: ${network}`,
+        `getContractsDeployed => Error: 'result' or 'transfers' not found in alchemy_getAssetTransfers response for address: ${userAddress}, network: ${network}`,
         txWithProxyData
       );
       return [];
