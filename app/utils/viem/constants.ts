@@ -1,6 +1,7 @@
 import { createPublicClient, http } from 'viem';
 import { mainnet, base, optimism, arbitrum } from 'viem/chains';
 import { contracts } from '@unlock-protocol/contracts';
+import internal from 'stream';
 
 const getClient = (network: string) => {
   let client = createPublicClient({
@@ -56,6 +57,29 @@ export const getLockIsValid = async (userAddress: string, lockAddress: string, n
   });
   console.log(`Does ${userAddress} have a valid membership in ${lockAddress} deployed on ${network}? ${isValid}`);
   return isValid;
+};
+
+export const getLockTotalKeys = async (userAddress: string, lockAddress: string, network: string): Promise<any> => {
+  let client = getClient(network);
+  const count = await client.readContract({
+    address: lockAddress as `0x${string}`,
+    abi: contracts.PublicLockV14.abi,
+    functionName: 'totalKeys',
+    args: [userAddress],
+  });
+  console.log(`How many keys does ${userAddress} have in lock ${lockAddress} deployed on ${network}? It has ${count}`);
+  return count;
+};
+
+export const getTokenOfOwnerByIndex = async (userAddress: string, index: Number, lockAddress: string, network: string): Promise<any> => {
+  let client = getClient(network);
+  const count = await client.readContract({
+    address: lockAddress as `0x${string}`,
+    abi: contracts.PublicLockV14.abi,
+    functionName: 'tokenOfOwnerByIndex',
+    args: [userAddress, index],
+  });
+  return count;
 };
 
 export const doAddressesHaveValidMembershipInRules = async (

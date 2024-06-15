@@ -12,7 +12,7 @@ import { Address } from 'viem';
 import { getUnlockProxyAddress } from '@/app/utils/unlock/membership';
 import { getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getAlchemyRpc } from '@/app/utils/alchemy/constants';
-import { doAddressesHaveValidMembershipInRules, getLockName, getMembersOnlyReferralFee } from '@/app/utils/viem/constants';
+import { doAddressesHaveValidMembershipInRules, getLockName, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
 
 const app = new Frog({
   assetsPath: '/',
@@ -54,7 +54,6 @@ app.hono.post("/hook-setup", async (c) => {
     // Probably second validation will be removed and just validated on the hook
     let castText = cast.text;
 
-    // console.log("call start: hook-setup => castAuthor == castText");
     if (channelLead == castAuthor && castText == process.env.BOT_SETUP_TEXT) {
       console.log("url to embed on reply cast: ", `${process.env.APP_URL}/api/frame-setup/${channelId}`);
       const castResponse = await neynarClient.publishCast(
@@ -107,10 +106,13 @@ app.hono.post("/hook-validate", async (c) => {
         return c.json({ message: "Cast reaction successful!" });
       } else {
         // Determine if the user has no NFT or if the user has an NFT but it's expired
-
-        // Has one of the addresses an expired membership?
-
-
+        let totalKeysCount = await getLockTotalKeys(userAddresses[0], channelRules[0].contract_address, channelRules[0].network);
+        if (totalKeysCount == 0) {
+          // if no keys then no nft, so suggest cast owner to buy a new key of the lock
+        } else {
+          // One or more keys are expired, so let's renew the first we found
+          let isOwnerOfToken = await getTokenOfOwnerByIndex(userAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
+        }
         let message = `Hey @${username}, it looks like you don't have a subscription yet. Let me help you with that.`;
         const castResponse = await neynarClient.publishCast(
           process.env.SIGNER_UUID!,
