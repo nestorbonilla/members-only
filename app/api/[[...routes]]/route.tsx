@@ -228,6 +228,9 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
 
   // Get the channel access rules
   let channelRules = await getChannelRules(channelId!);
+  console.log("frame-purchase => channelRules: ", channelRules);
+  console.log("frame-purchase => status: ", status);
+  console.log("frame-purchase => buttonValue: ", buttonValue);
 
   if (status == "initial" || (status == "response" && buttonValue == "done")) {
 
@@ -236,18 +239,24 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
     let lockMetadata = '';
     if (channelRules?.length! > 0) {
       lockMetadata = await getLockName(channelRules![0].contract_address, channelRules![0].network);
+      console.log("frame-purchase => lockMetadata: ", lockMetadata);
     }
     dynamicIntents = [
       <Button value='verify'>verify</Button>
     ];
 
   } else if (status == "response") {
+    console.log("frame-purchase => status: inside response");
     const payload = await req.json();
+    console.log("frame-purchase => payload: ", payload);
     if (process.env.NODE_ENV === 'production') {
+      console.log("frame-purchase => status: before validation");
       const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+      console.log("frame-purchase => frameActionResponse: ", frameActionResponse);
       if (frameActionResponse.valid) {
         ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
-        let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
+        console.log("frame-purchase => ethAddresses: ", ethAddresses);
+        // let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
         console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_ACTION_VALID]);
       } else {
         console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_ACTION_INVALID]);
@@ -257,10 +266,13 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
       ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
     }
     if (buttonValue == 'verify') {
+      console.log("frame-purchase => status: inside verify");
       // Verify there's at least one rule
       if (channelRules.length > 0) {
         // Verify the user doesn't have a valid membership
+        console.log("frame-purchase => before membershipIsValidForAtLeastOneAddress");
         membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(ethAddresses, channelRules);
+        console.log("frame-purchase => membershipIsValidForAtLeastOneAddress: ", membershipIsValidForAtLeastOneAddress);
         if (membershipIsValidForAtLeastOneAddress) {
           textFrame = `You already have a valid key to access ${channelId} channel. So just keep casting on your favorite channel!`;
           dynamicIntents = [
