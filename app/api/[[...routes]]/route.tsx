@@ -226,6 +226,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
   let conditions = 0;
   let membershipIsValidForAtLeastOneAddress = true;
   let totalKeysCount = 0;
+  let erc20Allowance = 0;
 
   // Get the channel access rules
   let channelRules = await getChannelRules(channelId!);
@@ -290,10 +291,16 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
           console.log("frame-purchase => totalKeysCount: ", totalKeysCount);
           let lockTokenAddress = await getLockTokenAddress(channelRules[0].contract_address, channelRules[0].network);
           console.log("frame-purchase => lockTokenAddress: ", lockTokenAddress);
-          let erc20Allowance = await getErc20Allowance(ethAddresses[0], lockTokenAddress, channelRules[0].contract_address, channelRules[0].network);
-          console.log("frame-purchase => erc20Allowance: ", erc20Allowance);
           let lockPrice = await getLockPrice(channelRules[0].contract_address, channelRules[0].network);
           console.log("frame-purchase => lockPrice: ", lockPrice);
+          if (lockTokenAddress == process.env.ZERO_ADDRESS) {
+            // to pass the validation
+            erc20Allowance = lockPrice;
+          } else {
+            erc20Allowance = await getErc20Allowance(ethAddresses[0], lockTokenAddress, channelRules[0].contract_address, channelRules[0].network);
+          }
+          console.log("frame-purchase => erc20Allowance: ", erc20Allowance);
+
           if (lockPrice >= erc20Allowance) {
             if (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0) {
               // Then the user has no keys, so let's suggest to buy a new key
