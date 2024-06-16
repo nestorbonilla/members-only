@@ -459,7 +459,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
 
         const nextBtn = (index: number) => {
           if (contractAddresses.length > 1 && index < (contractAddresses.length - 1)) {
-            return (<Button value={`addpage-${network}-${index}`}>next</Button>);
+            return (<Button value={`addpage-${network}-${index + 1}`}>next</Button>);
           }
         };
 
