@@ -722,7 +722,7 @@ app.transaction('/tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network
   console.log("tx-approval => lockAddress: ", paramLockAddress);
   console.log("tx-approval => network: ", network);
   console.log("tx-approval => chainId: ", paramChainId);
-  return c.contract({
+  let tx = c.contract({
     abi: erc20Abi,
     chainId: paramChainId,
     functionName: 'approve',
@@ -732,6 +732,8 @@ app.transaction('/tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network
     ],
     to: paramLockTokenAddress
   });
+  console.log("tx-approval => tx: ", tx);
+  return tx;
 });
 
 app.transaction('/tx-purchase/:lockAddress/:network/:userAddress', async (c) => {
