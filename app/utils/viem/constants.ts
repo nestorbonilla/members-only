@@ -1,7 +1,6 @@
 import { createPublicClient, http, erc20Abi } from 'viem';
-import { mainnet, base, optimism, arbitrum } from 'viem/chains';
+import { base, optimism, arbitrum } from 'viem/chains';
 import { contracts } from '@unlock-protocol/contracts';
-import internal from 'stream';
 
 const getClient = (network: string) => {
   let client = createPublicClient({
