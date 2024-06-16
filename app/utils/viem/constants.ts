@@ -99,6 +99,18 @@ export const getLockPrice = async (lockAddress: string, network: string): Promis
   return price;
 };
 
+export const getTotalSupply = async (lockAddress: string, network: string): Promise<any> => {
+  let client = getClient(network);
+  const totalSupply = await client.readContract({
+    address: lockAddress as `0x${string}`,
+    abi: contracts.PublicLockV14.abi,
+    functionName: 'totalSupply',
+    args: [],
+  });
+  console.log(`What's the total supply of the lock ${lockAddress} deployed on ${network}? It is ${totalSupply}`);
+  return totalSupply;
+}
+
 export const getTokenOfOwnerByIndex = async (userAddress: string, index: Number, lockAddress: string, network: string): Promise<any> => {
   let client = getClient(network);
   const count = await client.readContract({
