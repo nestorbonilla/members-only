@@ -75,6 +75,18 @@ export const getLockTotalKeys = async (userAddress: string, lockAddress: string,
   return count;
 };
 
+export const getLockPrice = async (lockAddress: string, network: string): Promise<any> => {
+  let client = getClient(network);
+  const price = await client.readContract({
+    address: lockAddress as `0x${string}`,
+    abi: contracts.PublicLockV14.abi,
+    functionName: 'keyPrice',
+    args: [],
+  });
+  console.log(`What's the price of a lock ${lockAddress} deployed on ${network}? It is ${price}`);
+  return price;
+};
+
 export const getTokenOfOwnerByIndex = async (userAddress: string, index: Number, lockAddress: string, network: string): Promise<any> => {
   let client = getClient(network);
   const count = await client.readContract({

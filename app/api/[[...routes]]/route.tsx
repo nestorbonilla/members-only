@@ -11,7 +11,7 @@ import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse }
 import { Address } from 'viem';
 import { deleteChannelRule, doesRuleWithContractExist, getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getContractsDeployed } from '@/app/utils/alchemy/constants';
-import { doAddressesHaveValidMembershipInRules, getLockName, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
+import { doAddressesHaveValidMembershipInRules, getLockName, getLockPrice, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
 
 const app = new Frog({
@@ -292,7 +292,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
             dynamicIntents = [
               <Button value='done'>back</Button>,
               // '/tx-purchase/:lockAddress/:network'
-              <Button.Transaction target={`/tx-purchase/${channelRules[0].contract_address}/${channelRules[0].network}`}>buy</Button.Transaction>
+              <Button.Transaction target={`/tx-purchase/${channelRules[0].contract_address}/${channelRules[0].network}/${ethAddresses[0]}`}>buy</Button.Transaction>
             ];
           } else {
             // One or more keys are expired, so let's renew the first we found
@@ -668,15 +668,23 @@ app.transaction('/tx-referrer-fee/:lockAddress/:network/:feeBasisPoint', (c) => 
   });
 });
 
-app.transaction('/tx-purchase/:lockAddress/:network', (c) => {
+app.transaction('/tx-purchase/:lockAddress/:network/:userAddress', async (c) => {
   const { req } = c;
   let lockAddress = req.param('lockAddress');
   let network = req.param('network');
+  let userAddress = req.param('userAddress');
+  let lockPrice = await getLockPrice(lockAddress, network);
   return c.contract({
     abi: contracts.PublicLockV14.abi,
     chainId: getEipChainId(network),
     functionName: 'purchase',
-    args: [],
+    args: [
+      [lockPrice], // _values uint256[]
+      [userAddress], // _recipients address[]
+      [process.env.MO_ADDRESS], // _referrers address[]
+      [userAddress], // _keyManagers address[]
+      [], // _data bytes[]
+    ],
     to: lockAddress as `0x${string}`
   });
 });
