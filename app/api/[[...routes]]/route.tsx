@@ -740,19 +740,24 @@ app.transaction('/tx-purchase/:lockAddress/:network/:userAddress', async (c) => 
   let network = req.param('network');
   let userAddress = req.param('userAddress');
   let lockPrice = await getLockPrice(lockAddress, network);
+  let paramLockAddress = lockAddress as `0x${string}`;
+  let paramUserAddress = userAddress as `0x${string}`;
+  let paramMOAddress = process.env.MO_ADDRESS as `0x${string}`;
+  let paramLockPrice = BigInt(lockPrice);
+
   console.log("lockPrice: ", lockPrice);
   return c.contract({
     abi: contracts.PublicLockV14.abi,
     chainId: getEipChainId(network),
     functionName: 'purchase',
     args: [
-      [lockPrice], // _values uint256[]
-      [userAddress], // _recipients address[]
-      [process.env.MO_ADDRESS], // _referrers address[]
-      [userAddress], // _keyManagers address[]
+      [paramLockPrice], // _values uint256[]
+      [paramUserAddress], // _recipients address[]
+      [paramMOAddress], // _referrers address[]
+      [paramUserAddress], // _keyManagers address[]
       [''], // _data bytes[]
     ],
-    to: lockAddress as `0x${string}`
+    to: paramLockAddress
   });
 });
 
