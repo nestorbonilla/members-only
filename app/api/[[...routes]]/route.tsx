@@ -435,8 +435,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         console.log("network selection: start");
         // Step 3: Show the contract addresses deployed on the selected network
         let network = buttonValue;
-        console.log("networks => network: ", network);
-        console.log("networks => ethAddresses: ", ethAddresses);
         const contractAddresses: string[] = (
           await Promise.all(
             ethAddresses.map(async (ethAddress) =>
@@ -468,7 +466,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         dynamicIntents = [
           <TextInput placeholder="Contract Address..." />,
           <Button value={'done'}>back</Button >,
-          nextBtn(1),
+          nextBtn(0),
           <Button value={`addconfirm-${network}-${(contractAddresses.length > 0) ? contractAddresses[0] : process.env.ZERO_ADDRESS}`}>confirm add</Button >,
         ];
         console.log("network selection: end");
@@ -531,7 +529,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         } else {
           let insertError = await insertChannelRule(channelId, network, contractAddress, "AND", "ALLOW");
           if (insertError) {
-            console.log("error: ", insertError);
             textFrame = `Error adding the rule.`;
             dynamicIntents = [
               <TextInput placeholder="Contract Address..." />,
@@ -552,8 +549,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         let [_, page] = buttonValue!.split("-");
         let currentPage = parseInt(page);
         let currentRule = channelRules![currentPage];
-        console.log("removepage- currentRule: ", currentRule);
-        console.log("removepage- contract_address: ", currentRule.contract_address);
         let lockMetadata = await getLockName(currentRule.contract_address, currentRule.network);
         if (lockMetadata) {
           textFrame = `${currentRule.network}: ${lockMetadata}`;
@@ -579,12 +574,8 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
       } else if (buttonValue!.startsWith("removeconfirm-")) {
         console.log("removeconfirm-: start");
         let [_, contractAddress] = buttonValue!.split("-");
-        console.log("removeconfirm- buttonValue: ", buttonValue);
-        console.log("removeconfirm- contractAddress: ", contractAddress);
-
         let deleteError = await deleteChannelRule(channelId, contractAddress);
         if (deleteError) {
-          console.log("error: ", deleteError);
           textFrame = `Error adding the rule.`;
           dynamicIntents = [
             <Button value={'done'}>Restart</Button >,
