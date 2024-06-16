@@ -744,11 +744,18 @@ app.transaction('/tx-purchase/:lockAddress/:network/:userAddress', async (c) => 
   let paramUserAddress = userAddress as `0x${string}`;
   let paramMOAddress = process.env.MO_ADDRESS as `0x${string}`;
   let paramLockPrice = BigInt(lockPrice);
+  type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
+  let paramChainId: EipChainId = getEipChainId(network);
+  console.log("tx-purchase => lockAddress: ", paramLockAddress);
+  console.log("tx-purchase => network: ", network);
+  console.log("tx-purchase => paramUserAddress: ", paramUserAddress);
+  console.log("tx-purchase => lockPrice: ", paramLockPrice);
+  console.log("tx-purchase => chainId: ", paramChainId);
 
   console.log("lockPrice: ", lockPrice);
   return c.contract({
     abi: contracts.PublicLockV14.abi,
-    chainId: getEipChainId(network),
+    chainId: paramChainId,
     functionName: 'purchase',
     args: [
       [paramLockPrice], // _values uint256[]
