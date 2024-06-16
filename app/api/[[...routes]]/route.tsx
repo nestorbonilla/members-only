@@ -740,19 +740,21 @@ app.transaction('/tx-purchase/:lockAddress/:network/:userAddress', async (c) => 
   let network = req.param('network');
   let userAddress = req.param('userAddress');
   let lockPrice = await getLockPrice(lockAddress, network);
+
   let paramLockAddress = lockAddress as `0x${string}`;
   let paramUserAddress = userAddress as `0x${string}`;
   let paramMOAddress = process.env.MO_ADDRESS as `0x${string}`;
   let paramLockPrice = BigInt(lockPrice);
   type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
   let paramChainId: EipChainId = getEipChainId(network);
+
+  // Logs
   console.log("tx-purchase => lockAddress: ", paramLockAddress);
   console.log("tx-purchase => network: ", network);
   console.log("tx-purchase => paramUserAddress: ", paramUserAddress);
   console.log("tx-purchase => lockPrice: ", paramLockPrice);
   console.log("tx-purchase => chainId: ", paramChainId);
 
-  console.log("lockPrice: ", lockPrice);
   return c.contract({
     abi: contracts.PublicLockV14.abi,
     chainId: paramChainId,
@@ -773,20 +775,28 @@ app.transaction('/tx-renew/:lockAddress/:network/:tokenId', (c) => {
   let lockAddress = req.param('lockAddress');
   let network = req.param('network');
   let tokenId = req.param('tokenId');
+
+  let paramLockAddress = lockAddress as `0x${string}`;
+  let paramMOAddress = process.env.MO_ADDRESS as `0x${string}`;
+  type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
+  let paramChainId: EipChainId = getEipChainId(network);
+
+  // Logs
   console.log("tx-renew => lockAddress: ", lockAddress);
   console.log("tx-renew => network: ", network);
   console.log("tx-renew => tokenId: ", tokenId);
-  console.log("tx-renew => MO_ADDRESS: ", process.env.MO_ADDRESS);
-  console.log("tx-renew => chainId: ", getEipChainId(network));
+  console.log("tx-renew => MO_ADDRESS: ", paramMOAddress);
+  console.log("tx-renew => chainId: ", paramChainId);
+
   return c.contract({
     abi: contracts.PublicLockV14.abi,
-    chainId: getEipChainId(network),
+    chainId: paramChainId,
     functionName: 'renewMembershipFor',
     args: [
       tokenId,
-      process.env.MO_ADDRESS,
+      paramMOAddress,
     ],
-    to: lockAddress as `0x${string}`
+    to: paramLockAddress
   });
 });
 
