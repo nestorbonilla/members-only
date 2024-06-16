@@ -286,9 +286,13 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
             )
           );
           let totalKeysCount = keyCounts.reduce((sum, count) => sum + Number(count), 0);
+          console.log("frame-purchase => totalKeysCount: ", totalKeysCount);
           let lockTokenAddress = await getLockTokenAddress(channelRules[0].contract_address, channelRules[0].network);
+          console.log("frame-purchase => lockTokenAddress: ", lockTokenAddress);
           let erc20Allowance = await getErc20Allowance(ethAddresses[0], lockTokenAddress, channelRules[0].contract_address, channelRules[0].network);
+          console.log("frame-purchase => erc20Allowance: ", erc20Allowance);
           let lockPrice = await getLockPrice(channelRules[0].contract_address, channelRules[0].network);
+          console.log("frame-purchase => lockPrice: ", lockPrice);
           if (lockPrice >= erc20Allowance) {
             if (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0) {
               // Then the user has no keys, so let's suggest to buy a new key
