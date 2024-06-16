@@ -168,7 +168,7 @@ app.hono.post("/hook-validate", async (c) => {
       const userAddresses = cast.author.verified_addresses.eth_addresses;
       console.log("hook-validate => userAddresses: ", userAddresses);
       let membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(userAddresses, channelRules);
-      console.log("hook-validate => userAddresses: ", userAddresses);
+      console.log("hook-validate => membershipIsValidForAtLeastOneAddress: ", membershipIsValidForAtLeastOneAddress);
       if (membershipIsValidForAtLeastOneAddress) {
         let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash);
         if (castReactionResponse.success) {

@@ -86,6 +86,32 @@ export const getTokenOfOwnerByIndex = async (userAddress: string, index: Number,
   return count;
 };
 
+// export const doAddressesHaveValidMembershipInRules = async (
+//   userAddresses: string[],
+//   channelRules: {
+//     id: number,
+//     channel_id: string,
+//     operator: string,
+//     rule_behavior: string,
+//     network: string,
+//     contract_address: string,
+//     created_at: string,
+//     updated_at: string | null
+//   }[]
+// ) => {
+//   const membershipPromises = userAddresses.flatMap(userAddress =>
+//     channelRules.map(rule => getLockIsValid(userAddress, rule.contract_address, rule.network))
+//   );
+
+//   try {
+//     await Promise.any(membershipPromises); // Wait for at least ONE to resolve
+//     return true; // At least one membership is valid
+//   } catch (error) {
+//     // If ALL promises are rejected (no valid membership found)
+//     return false;
+//   }
+// };
+
 export const doAddressesHaveValidMembershipInRules = async (
   userAddresses: string[],
   channelRules: {
@@ -98,16 +124,14 @@ export const doAddressesHaveValidMembershipInRules = async (
     created_at: string,
     updated_at: string | null
   }[]
-) => {
-  const membershipPromises = userAddresses.flatMap(userAddress =>
-    channelRules.map(rule => getLockIsValid(userAddress, rule.contract_address, rule.network))
-  );
-
-  try {
-    await Promise.any(membershipPromises); // Wait for at least ONE to resolve
-    return true; // At least one membership is valid
-  } catch (error) {
-    // If ALL promises are rejected (no valid membership found)
-    return false;
+): Promise<boolean> => {
+  for (const userAddress of userAddresses) {
+    for (const rule of channelRules) {
+      const isValid = await getLockIsValid(userAddress, rule.contract_address, rule.network);
+      if (isValid) {
+        return true; // Found a valid membership, so return early
+      }
+    }
   }
+  return false; // No valid membership found after checking all combinations
 };
