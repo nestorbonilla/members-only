@@ -306,9 +306,10 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
             } else {
               // One or more keys are expired, so let's renew the first we found
               if (totalKeysCount > 0) {
-                console.log("frame-purchase => before getFirstTokenIdOfOwner");
+                console.log("frame-purchase => renew before getFirstTokenIdOfOwner");
                 let tokenId = await getFirstTokenIdOfOwner(ethAddresses[0], totalKeysCount, channelRules[0].contract_address, channelRules[0].network);
-                console.log("frame-purchase => tokenId: ", tokenId);
+                console.log("frame-purchase => renew tokenId: ", tokenId);
+                console.log("frame-purchase => renew target: ", `/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}`);
                 textFrame = `You have an expired key. Let's renew it:`;
                 dynamicIntents = [
                   <Button value='done'>back</Button>,
@@ -741,6 +742,11 @@ app.transaction('/tx-renew/:lockAddress/:network/:tokenId', (c) => {
   let lockAddress = req.param('lockAddress');
   let network = req.param('network');
   let tokenId = req.param('tokenId');
+  console.log("tx-renew => lockAddress: ", lockAddress);
+  console.log("tx-renew => network: ", network);
+  console.log("tx-renew => tokenId: ", tokenId);
+  console.log("tx-renew => MO_ADDRESS: ", process.env.MO_ADDRESS);
+  console.log("tx-renew => chainId: ", getEipChainId(network));
   return c.contract({
     abi: contracts.PublicLockV14.abi,
     chainId: getEipChainId(network),
