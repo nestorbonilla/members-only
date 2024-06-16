@@ -8,7 +8,7 @@ import { handle } from 'frog/next';
 import { serveStatic } from 'frog/serve-static';
 import neynarClient, { getEipChainId } from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
-import { Address, erc20Abi } from 'viem';
+import { Address, erc20Abi, parseEther } from 'viem';
 import { deleteChannelRule, doesRuleWithContractExist, getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getContractsDeployed } from '@/app/utils/alchemy/constants';
 import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getFirstTokenIdOfOwner, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
@@ -226,7 +226,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
   let conditions = 0;
   let membershipIsValidForAtLeastOneAddress = true;
   let totalKeysCount = 0;
-  let erc20Allowance = 0;
+  let erc20Allowance = BigInt(0);
 
   // Get the channel access rules
   let channelRules = await getChannelRules(channelId!);
@@ -293,6 +293,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
           console.log("frame-purchase => lockTokenAddress: ", lockTokenAddress);
           let lockPrice = await getLockPrice(channelRules[0].contract_address, channelRules[0].network);
           console.log("frame-purchase => lockPrice: ", lockPrice);
+          let some = parseEther(lockPrice.toString());
           if (lockTokenAddress == process.env.ZERO_ADDRESS) {
             // to pass the validation
             erc20Allowance = lockPrice;
@@ -302,6 +303,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
           console.log("frame-purchase => erc20Allowance: ", erc20Allowance);
 
           if (lockPrice >= erc20Allowance) {
+            console.log(`${lockPrice} >= ${erc20Allowance}`);
             if (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0) {
               // Then the user has no keys, so let's suggest to buy a new key
               textFrame = `You don't have a key to access ${channelId} channel. Let's mint one:`;
