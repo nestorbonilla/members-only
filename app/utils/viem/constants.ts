@@ -111,7 +111,17 @@ export const getTotalSupply = async (lockAddress: string, network: string): Prom
   return totalSupply;
 }
 
-export const getTokenOfOwnerByIndex = async (userAddress: string, index: Number, lockAddress: string, network: string): Promise<any> => {
+export const getFirstTokenIdOfOwner = async (ethAddress: string, totalKeysCount: number, contractAddress: string, network: string) => {
+  for (let index = 0; index < totalKeysCount; index++) {
+    const isOwner = await getTokenOfOwnerByIndex(ethAddress, index, contractAddress, network);
+    if (isOwner > 0) {
+      return index; // Found an owned key, return the index
+    }
+  }
+  return -1; // No owned keys found
+};
+
+export const getTokenOfOwnerByIndex = async (userAddress: string, index: number, lockAddress: string, network: string): Promise<any> => {
   let client = getClient(network);
   const count = await client.readContract({
     address: lockAddress as `0x${string}`,

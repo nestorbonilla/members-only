@@ -11,7 +11,7 @@ import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse }
 import { Address, erc20Abi } from 'viem';
 import { deleteChannelRule, doesRuleWithContractExist, getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getContractsDeployed } from '@/app/utils/alchemy/constants';
-import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
+import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getFirstTokenIdOfOwner, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
 
 const app = new Frog({
@@ -222,6 +222,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
   let channelId = req.param('channelId');
   let textFrame = "";
   let dynamicIntents: any[] = [];
+  let dynamicAction = `/frame-purchase/${channelId}`;
   let conditions = 0;
   let membershipIsValidForAtLeastOneAddress = true;
   let totalKeysCount = 0;
@@ -304,14 +305,23 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
               ];
             } else {
               // One or more keys are expired, so let's renew the first we found
-              // let isOwnerOfToken = await getTokenOfOwnerByIndex(ethAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
-              let tokenId = 0;
-              textFrame = `You have an expired key. Let's renew it:`;
-              dynamicIntents = [
-                <Button value='done'>back</Button>,
-                // /tx-renew/:lockAddress/:network/:tokenId
-                <Button.Transaction target={`/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}`}>renew</Button.Transaction>
-              ];
+              if (totalKeysCount > 0) {
+                console.log("frame-purchase => before getFirstTokenIdOfOwner");
+                let tokenId = await getFirstTokenIdOfOwner(ethAddresses[0], totalKeysCount, channelRules[0].contract_address, channelRules[0].network);
+                console.log("frame-purchase => tokenId: ", tokenId);
+                textFrame = `You have an expired key. Let's renew it:`;
+                dynamicIntents = [
+                  <Button value='done'>back</Button>,
+                  // /tx-renew/:lockAddress/:network/:tokenId
+                  <Button.Transaction target={`/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}`}>renew</Button.Transaction>
+                ];
+              } else {
+                textFrame = `We couldn't find any expired keys. Please try again later.`;
+                dynamicIntents = [
+                  <Button value='done'>back</Button>,
+                ];
+              }
+
             }
           } else {
             textFrame = `Before buy or renew your membership, let's approve an allowance for the price of the key:`;
@@ -360,6 +370,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
       </div>
     ),
     intents: dynamicIntents,
+    action: dynamicAction
   });
 
 });
