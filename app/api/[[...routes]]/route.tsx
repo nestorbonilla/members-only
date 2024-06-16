@@ -166,8 +166,9 @@ app.hono.post("/hook-validate", async (c) => {
       let channel = await getChannel(cast.root_parent_url!);
       let channelRules = await getChannelRules(channel?.id!);
       const userAddresses = cast.author.verified_addresses.eth_addresses;
+      console.log("hook-validate => userAddresses: ", userAddresses);
       let membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(userAddresses, channelRules);
-
+      console.log("hook-validate => userAddresses: ", userAddresses);
       if (membershipIsValidForAtLeastOneAddress) {
         let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash);
         if (castReactionResponse.success) {
@@ -177,8 +178,10 @@ app.hono.post("/hook-validate", async (c) => {
         }
       } else {
         let textCast = '';
+        console.log("hook-validate => membershipIsValidForAtLeastOneAddress: ", membershipIsValidForAtLeastOneAddress);
         // Determine if the user has no NFT or if the user has an NFT but it's expired
         let totalKeysCount = await getLockTotalKeys(userAddresses[0], channelRules[0].contract_address, channelRules[0].network);
+        console.log("hook-validate => totalKeysCount: ", totalKeysCount);
         if (totalKeysCount == 0) {
           // if no keys then no nft, so suggest cast owner to buy a new key of the lock
           textCast = `Hey @${username}, it looks like you don't have a key to access ${channel?.id} channel yet. Let me help you with that.`;
@@ -186,7 +189,9 @@ app.hono.post("/hook-validate", async (c) => {
           // One or more keys are expired, so let's renew the first we found
           textCast = `Hey @${username}, it looks like you have an expired key to access ${channel?.id} channel. Let me help you with that.`;
           let isOwnerOfToken = await getTokenOfOwnerByIndex(userAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
+          console.log("hook-validate => isOwnerOfToken: ", isOwnerOfToken);
         }
+        console.log("hook-validate => textCast: ", textCast);
         const castResponse = await neynarClient.publishCast(
           process.env.SIGNER_UUID!,
           textCast,
@@ -494,9 +499,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
 
         const prevBtn = (index: number) => {
           if (contractAddresses.length > 0 && index > 0) {
-            console.log("addpage-: prevBtn");
-            console.log("addpage-: index", index);
-            console.log("addpage-: contractAddresses", contractAddresses);
             return (<Button value={`addpage-${network}-${index - 1}`}>prev</Button>);
           }
         };
