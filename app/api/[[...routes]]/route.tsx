@@ -256,42 +256,43 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
       // For local development
       ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
     }
-
-    // Verify there's at least one rule
-    if (channelRules.length > 0) {
-      // Verify the user doesn't have a valid membership
-      membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(ethAddresses, channelRules);
-      if (membershipIsValidForAtLeastOneAddress) {
-        textFrame = `You already have a valid key to access ${channelId} channel. So just keep casting on your favorite channel!`;
-        dynamicIntents = [
-          <Button value='done'>complete</Button>
-        ];
-      } else {
-        // Verify the user doesn't have an expired membership
-        let keyCounts = await Promise.all(
-          ethAddresses.map((ethAddress) =>
-            getLockTotalKeys(ethAddress, channelRules[0].contract_address, channelRules[0].network)
-          )
-        );
-        let totalKeysCount = keyCounts.reduce((sum, count) => sum + Number(count), 0);
-        if (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0) {
-          // Then the user has no keys, so let's suggest to buy a new key
-          textFrame = `You don't have a key to access ${channelId} channel. Let's mint one:`;
+    if (buttonValue == 'verify') {
+      // Verify there's at least one rule
+      if (channelRules.length > 0) {
+        // Verify the user doesn't have a valid membership
+        membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(ethAddresses, channelRules);
+        if (membershipIsValidForAtLeastOneAddress) {
+          textFrame = `You already have a valid key to access ${channelId} channel. So just keep casting on your favorite channel!`;
           dynamicIntents = [
-            <Button value='done'>back</Button>,
-            // '/tx-purchase/:lockAddress/:network'
-            <Button.Transaction target={`/tx-purchase/${channelRules[0].contract_address}/${channelRules[0].network}`}>buy</Button.Transaction>
+            <Button value='done'>complete</Button>
           ];
         } else {
-          // One or more keys are expired, so let's renew the first we found
-          // let isOwnerOfToken = await getTokenOfOwnerByIndex(ethAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
-          let tokenId = 0;
-          textFrame = `You have an expired key. Let's renew it:`;
-          dynamicIntents = [
-            <Button value='done'>back</Button>,
-            // /tx-renew/:lockAddress/:network/:tokenId
-            <Button.Transaction target={`/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}`}>renew</Button.Transaction>
-          ];
+          // Verify the user doesn't have an expired membership
+          let keyCounts = await Promise.all(
+            ethAddresses.map((ethAddress) =>
+              getLockTotalKeys(ethAddress, channelRules[0].contract_address, channelRules[0].network)
+            )
+          );
+          let totalKeysCount = keyCounts.reduce((sum, count) => sum + Number(count), 0);
+          if (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0) {
+            // Then the user has no keys, so let's suggest to buy a new key
+            textFrame = `You don't have a key to access ${channelId} channel. Let's mint one:`;
+            dynamicIntents = [
+              <Button value='done'>back</Button>,
+              // '/tx-purchase/:lockAddress/:network'
+              <Button.Transaction target={`/tx-purchase/${channelRules[0].contract_address}/${channelRules[0].network}`}>buy</Button.Transaction>
+            ];
+          } else {
+            // One or more keys are expired, so let's renew the first we found
+            // let isOwnerOfToken = await getTokenOfOwnerByIndex(ethAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
+            let tokenId = 0;
+            textFrame = `You have an expired key. Let's renew it:`;
+            dynamicIntents = [
+              <Button value='done'>back</Button>,
+              // /tx-renew/:lockAddress/:network/:tokenId
+              <Button.Transaction target={`/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}`}>renew</Button.Transaction>
+            ];
+          }
         }
       }
     }
