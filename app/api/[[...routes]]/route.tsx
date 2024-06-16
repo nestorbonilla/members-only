@@ -478,18 +478,18 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         const contractAddresses: string[] = (
           await Promise.all(
             ethAddresses.map(async (ethAddress) =>
-              getContractsDeployed(ethAddress, network!)
+              getContractsDeployed(ethAddress, network)
             )
           )
         ).flat();
 
-        let referralFee = await getMembersOnlyReferralFee(contractAddresses[currentPage], network);
-        console.log("referralFee: ", referralFee);
+        // let referralFee = await getMembersOnlyReferralFee(contractAddresses[currentPage], network);
+        // console.log("referralFee: ", referralFee);
         // if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
         //   // do aditional logic here
         // }
 
-        let lockMetadata = await getLockName(channelRules![currentPage].contract_address, channelRules![currentPage].network);
+        let lockMetadata = await getLockName(contractAddresses[currentPage], network);
         textFrame = `${network}: ${lockMetadata}`;
 
         const prevBtn = (index: number) => {
