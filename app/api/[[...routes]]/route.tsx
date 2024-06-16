@@ -497,12 +497,12 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
             console.log("addpage-: prevBtn");
             console.log("addpage-: index", index);
             console.log("addpage-: contractAddresses", contractAddresses);
-            return (<Button value={`addpage-${index - 1}`}>prev</Button>);
+            return (<Button value={`addpage-${network}-${index - 1}`}>prev</Button>);
           }
         };
         const nextBtn = (index: number) => {
           if (contractAddresses.length > (index + 1)) {
-            return (<Button value={`addpage-${index + 1}`}>next</Button>);
+            return (<Button value={`addpage-${network}-${index + 1}`}>next</Button>);
           }
         };
 
