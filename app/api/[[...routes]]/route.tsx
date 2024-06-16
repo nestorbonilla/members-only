@@ -717,12 +717,15 @@ app.transaction('/tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network
   let paramLockPrice = BigInt(lockPrice);
   type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
   let paramChainId: EipChainId = getEipChainId(network);
+
+  // Logs
   console.log("tx-approval => lockTokenAddress: ", paramLockTokenAddress);
   console.log("tx-approval => lockPrice: ", paramLockPrice);
   console.log("tx-approval => lockAddress: ", paramLockAddress);
   console.log("tx-approval => network: ", network);
   console.log("tx-approval => chainId: ", paramChainId);
-  let tx = c.contract({
+
+  return c.contract({
     abi: erc20Abi,
     chainId: paramChainId,
     functionName: 'approve',
@@ -732,8 +735,6 @@ app.transaction('/tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network
     ],
     to: paramLockTokenAddress
   });
-  console.log("tx-approval => tx: ", tx);
-  return tx;
 });
 
 app.transaction('/tx-purchase/:lockAddress/:network/:userAddress', async (c) => {
@@ -790,7 +791,7 @@ app.transaction('/tx-renew/:lockAddress/:network/:tokenId', (c) => {
   console.log("tx-renew => MO_ADDRESS: ", paramMOAddress);
   console.log("tx-renew => chainId: ", paramChainId);
 
-  return c.contract({
+  let tx = c.contract({
     abi: contracts.PublicLockV14.abi,
     chainId: paramChainId,
     functionName: 'renewMembershipFor',
@@ -800,6 +801,9 @@ app.transaction('/tx-renew/:lockAddress/:network/:tokenId', (c) => {
     ],
     to: paramLockAddress
   });
+  console.log("tx-renew => tx: ", tx);
+
+  return tx;
 });
 
 // app.image('/frame-setup-image/:customText', (c) => {
