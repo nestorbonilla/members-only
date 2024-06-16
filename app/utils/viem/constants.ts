@@ -1,4 +1,4 @@
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, erc20Abi } from 'viem';
 import { mainnet, base, optimism, arbitrum } from 'viem/chains';
 import { contracts } from '@unlock-protocol/contracts';
 import internal from 'stream';
@@ -75,6 +75,18 @@ export const getLockTotalKeys = async (userAddress: string, lockAddress: string,
   return count;
 };
 
+export const getLockTokenAddress = async (lockAddress: string, network: string): Promise<any> => {
+  let client = getClient(network);
+  const tokenAddress = await client.readContract({
+    address: lockAddress as `0x${string}`,
+    abi: contracts.PublicLockV14.abi,
+    functionName: 'tokenAddress',
+    args: [],
+  });
+  console.log(`What's the address of the erc20 price of the lock ${lockAddress} deployed on ${network}? It is ${tokenAddress}`);
+  return tokenAddress;
+};
+
 export const getLockPrice = async (lockAddress: string, network: string): Promise<any> => {
   let client = getClient(network);
   const price = await client.readContract({
@@ -147,3 +159,14 @@ export const doAddressesHaveValidMembershipInRules = async (
   }
   return false; // No valid membership found after checking all combinations
 };
+
+export const getErc20Allowance = async (userAddress: string, tokenAddress: string, lockAddress: string, network: string): Promise<any> => {
+  let client = getClient(network);
+  const allowance = await client.readContract({
+    address: tokenAddress as `0x${string}`,
+    abi: erc20Abi,
+    functionName: 'allowance',
+    args: [userAddress as `0x${string}`, lockAddress as `0x${string}`],
+  });
+  return allowance;
+}

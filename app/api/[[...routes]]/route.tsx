@@ -8,10 +8,10 @@ import { handle } from 'frog/next';
 import { serveStatic } from 'frog/serve-static';
 import neynarClient, { getEipChainId } from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
-import { Address } from 'viem';
+import { Address, erc20Abi } from 'viem';
 import { deleteChannelRule, doesRuleWithContractExist, getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getContractsDeployed } from '@/app/utils/alchemy/constants';
-import { doAddressesHaveValidMembershipInRules, getLockName, getLockPrice, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
+import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
 
 const app = new Frog({
@@ -286,23 +286,35 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
             )
           );
           let totalKeysCount = keyCounts.reduce((sum, count) => sum + Number(count), 0);
-          if (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0) {
-            // Then the user has no keys, so let's suggest to buy a new key
-            textFrame = `You don't have a key to access ${channelId} channel. Let's mint one:`;
-            dynamicIntents = [
-              <Button value='done'>back</Button>,
-              // '/tx-purchase/:lockAddress/:network'
-              <Button.Transaction target={`/tx-purchase/${channelRules[0].contract_address}/${channelRules[0].network}/${ethAddresses[0]}`}>buy</Button.Transaction>
-            ];
+          let lockTokenAddress = await getLockTokenAddress(channelRules[0].contract_address, channelRules[0].network);
+          let erc20Allowance = await getErc20Allowance(ethAddresses[0], lockTokenAddress, channelRules[0].contract_address, channelRules[0].network);
+          let lockPrice = await getLockPrice(channelRules[0].contract_address, channelRules[0].network);
+          if (lockPrice >= erc20Allowance) {
+            if (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0) {
+              // Then the user has no keys, so let's suggest to buy a new key
+              textFrame = `You don't have a key to access ${channelId} channel. Let's mint one:`;
+              dynamicIntents = [
+                <Button value='done'>back</Button>,
+                // '/tx-purchase/:lockAddress/:network'
+                <Button.Transaction target={`/tx-purchase/${channelRules[0].contract_address}/${channelRules[0].network}/${ethAddresses[0]}`}>buy</Button.Transaction>
+              ];
+            } else {
+              // One or more keys are expired, so let's renew the first we found
+              // let isOwnerOfToken = await getTokenOfOwnerByIndex(ethAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
+              let tokenId = 0;
+              textFrame = `You have an expired key. Let's renew it:`;
+              dynamicIntents = [
+                <Button value='done'>back</Button>,
+                // /tx-renew/:lockAddress/:network/:tokenId
+                <Button.Transaction target={`/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}`}>renew</Button.Transaction>
+              ];
+            }
           } else {
-            // One or more keys are expired, so let's renew the first we found
-            // let isOwnerOfToken = await getTokenOfOwnerByIndex(ethAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
-            let tokenId = 0;
-            textFrame = `You have an expired key. Let's renew it:`;
+            textFrame = `Before buy or renew your membership, let's approve an allowance for the price of the key:`;
             dynamicIntents = [
               <Button value='done'>back</Button>,
-              // /tx-renew/:lockAddress/:network/:tokenId
-              <Button.Transaction target={`/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}`}>renew</Button.Transaction>
+              // /tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network
+              <Button.Transaction target={`/tx-approval/${lockTokenAddress}/${lockPrice}/${channelRules[0].contract_address}/${channelRules[0].network}`}>approval</Button.Transaction>
             ];
           }
         }
@@ -665,6 +677,25 @@ app.transaction('/tx-referrer-fee/:lockAddress/:network/:feeBasisPoint', (c) => 
     functionName: 'setReferrerFee',
     args: [process.env.MO_ADDRESS, feeBasisPoint],
     to: lockAddress as `0x${string}`
+  });
+});
+
+app.transaction('/tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network', async (c) => {
+  const { req } = c;
+  let lockTokenAddress = req.param('lockTokenAddress');
+  let lockPrice = req.param('lockPrice');
+  let lockAddress = req.param('lockAddress');
+  let network = req.param('network');
+  console.log("lockPrice: ", lockPrice);
+  return c.contract({
+    abi: erc20Abi,
+    chainId: getEipChainId(network),
+    functionName: 'approve',
+    args: [
+      lockAddress as `0x${string}`, // spender address
+      BigInt(lockPrice), // amount uint256
+    ],
+    to: lockTokenAddress as `0x${string}`
   });
 });
 
