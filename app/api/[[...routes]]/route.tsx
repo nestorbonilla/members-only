@@ -302,7 +302,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
           }
           console.log("frame-purchase => erc20Allowance: ", erc20Allowance);
 
-          if (lockPrice >= erc20Allowance) {
+          if (erc20Allowance >= lockPrice) {
             console.log(`${lockPrice} >= ${erc20Allowance}`);
             if (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0) {
               // Then the user has no keys, so let's suggest to buy a new key
@@ -335,6 +335,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
             }
           } else {
             textFrame = `Before buy or renew your membership, let's approve an allowance for the price of the key:`;
+            console.log("frame-purchase => approve before calling tx-approval");
             dynamicIntents = [
               <Button value='done'>back</Button>,
               // /tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network
@@ -380,7 +381,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
       </div>
     ),
     intents: dynamicIntents,
-    action: dynamicAction
+    // action: dynamicAction
   });
 
 });
@@ -711,16 +712,25 @@ app.transaction('/tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network
   let lockPrice = req.param('lockPrice');
   let lockAddress = req.param('lockAddress');
   let network = req.param('network');
-  console.log("lockPrice: ", lockPrice);
+  let paramLockTokenAddress = lockTokenAddress as `0x${string}`
+  let paramLockAddress = lockAddress as `0x${string}`
+  let paramLockPrice = BigInt(lockPrice);
+  type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
+  let paramChainId: EipChainId = getEipChainId(network);
+  console.log("tx-approval => lockTokenAddress: ", paramLockTokenAddress);
+  console.log("tx-approval => lockPrice: ", paramLockPrice);
+  console.log("tx-approval => lockAddress: ", paramLockAddress);
+  console.log("tx-approval => network: ", network);
+  console.log("tx-approval => chainId: ", paramChainId);
   return c.contract({
     abi: erc20Abi,
-    chainId: getEipChainId(network),
+    chainId: paramChainId,
     functionName: 'approve',
     args: [
-      lockAddress as `0x${string}`, // spender address
-      BigInt(lockPrice), // amount uint256
+      paramLockAddress, // spender address
+      paramLockPrice, // amount uint256
     ],
-    to: lockTokenAddress as `0x${string}`
+    to: paramLockTokenAddress
   });
 });
 
