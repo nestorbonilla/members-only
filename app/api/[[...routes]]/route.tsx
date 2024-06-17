@@ -269,6 +269,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
     }
     if (buttonValue == 'verify') {
       console.log("frame-purchase => status: inside verify");
+      console.log("frame-purchase => channelRules: ", channelRules.length);
       // Verify there's at least one rule
       if (channelRules.length > 0) {
         // Verify the user doesn't have a valid membership
@@ -783,27 +784,30 @@ app.transaction('/tx-renew/:lockAddress/:network/:tokenId', (c) => {
   let paramMOAddress = process.env.MO_ADDRESS as `0x${string}`;
   type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
   let paramChainId: EipChainId = getEipChainId(network);
+  let paramLockAbi = contracts.PublicLockV14.abi;
 
   // Logs
-  console.log("tx-renew => lockAddress: ", lockAddress);
+  console.log("tx-renew => lockAddress: ", paramLockAddress);
   console.log("tx-renew => network: ", network);
   console.log("tx-renew => tokenId: ", tokenId);
   console.log("tx-renew => MO_ADDRESS: ", paramMOAddress);
   console.log("tx-renew => chainId: ", paramChainId);
+  // console.log("tx-renew => paramLockAbi: ", paramLockAbi);
 
-  let tx = c.contract({
-    abi: contracts.PublicLockV14.abi,
+  return c.contract({
+    abi: paramLockAbi,
     chainId: paramChainId,
     functionName: 'renewMembershipFor',
     args: [
       tokenId,
       paramMOAddress,
     ],
-    to: paramLockAddress
+    to: paramLockAddress,
+    // gas: BigInt(1000000)
   });
-  console.log("tx-renew => tx: ", tx);
+  // console.log("tx-renew => tx: ", tx);
 
-  return tx;
+  // return tx;
 });
 
 // app.image('/frame-setup-image/:customText', (c) => {
