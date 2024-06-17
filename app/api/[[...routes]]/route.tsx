@@ -188,8 +188,9 @@ app.hono.post("/hook-validate", async (c) => {
         } else {
           // One or more keys are expired, so let's renew the first we found
           textCast = `Hey @${username}, it looks like you have an expired key to access ${channel?.id} channel. Let me help you with that.`;
-          let isOwnerOfToken = await getTokenOfOwnerByIndex(userAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
-          console.log("hook-validate => isOwnerOfToken: ", isOwnerOfToken);
+          let tokenId = await getTokenOfOwnerByIndex(userAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
+          console.log("hook-validate => tokenId: ", tokenId);
+          // maybe additional logic here
         }
         console.log("hook-validate => textCast: ", textCast);
         const castResponse = await neynarClient.publishCast(
@@ -324,7 +325,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
                 dynamicIntents = [
                   <Button value='done'>back</Button>,
                   // /tx-renew/:lockAddress/:network/:tokenId
-                  <Button.Transaction target={`/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}`}>renew</Button.Transaction>
+                  <Button.Transaction target={`/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}/${lockPrice}`}>renew</Button.Transaction>
                 ];
               } else {
                 textFrame = `We couldn't find any expired keys. Please try again later.`;
@@ -332,7 +333,6 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
                   <Button value='done'>back</Button>,
                 ];
               }
-
             }
           } else {
             textFrame = `Before buy or renew your membership, let's approve an allowance for the price of the key:`;
@@ -774,40 +774,40 @@ app.transaction('/tx-purchase/:lockAddress/:network/:userAddress', async (c) => 
   });
 });
 
-app.transaction('/tx-renew/:lockAddress/:network/:tokenId', (c) => {
+app.transaction('/tx-renew/:lockAddress/:network/:tokenId/:price', (c) => {
   const { req } = c;
   let lockAddress = req.param('lockAddress');
   let network = req.param('network');
   let tokenId = req.param('tokenId');
+  let price = req.param('price');
 
   let paramLockAddress = lockAddress as `0x${string}`;
   let paramMOAddress = process.env.MO_ADDRESS as `0x${string}`;
   type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
   let paramChainId: EipChainId = getEipChainId(network);
   let paramLockAbi = contracts.PublicLockV14.abi;
+  let paramPrice = BigInt(price);
 
   // Logs
   console.log("tx-renew => lockAddress: ", paramLockAddress);
   console.log("tx-renew => network: ", network);
   console.log("tx-renew => tokenId: ", tokenId);
+  console.log("tx-renew => paramPrice: ", paramPrice);
   console.log("tx-renew => MO_ADDRESS: ", paramMOAddress);
   console.log("tx-renew => chainId: ", paramChainId);
-  // console.log("tx-renew => paramLockAbi: ", paramLockAbi);
 
   return c.contract({
     abi: paramLockAbi,
     chainId: paramChainId,
-    functionName: 'renewMembershipFor',
+    functionName: 'extend',
     args: [
-      tokenId,
-      paramMOAddress,
+      paramPrice, // _values uint256
+      tokenId,  // _tokenId uint256
+      paramMOAddress, // _referrer address
+      '', // _data bytes
     ],
-    to: paramLockAddress,
-    // gas: BigInt(1000000)
+    to: paramLockAddress
   });
-  // console.log("tx-renew => tx: ", tx);
-
-  // return tx;
 });
 
 // app.image('/frame-setup-image/:customText', (c) => {
