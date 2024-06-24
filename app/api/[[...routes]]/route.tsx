@@ -8,10 +8,10 @@ import { handle } from 'frog/next';
 import { serveStatic } from 'frog/serve-static';
 import neynarClient, { getEipChainId } from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
-import { Address, erc20Abi, parseEther } from 'viem';
+import { Address, erc20Abi, parseEther, formatUnits } from 'viem';
 import { deleteChannelRule, doesRuleWithContractExist, getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getContractsDeployed } from '@/app/utils/alchemy/constants';
-import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getFirstTokenIdOfOwner, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getMembersOnlyReferralFee, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
+import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getErc20Decimals, getErc20Symbol, getFirstTokenIdOfOwner, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getMembersOnlyReferralFee, getTokenExpiration, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
 
 const app = new Frog({
@@ -224,131 +224,172 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
   let textFrame = "";
   let dynamicIntents: any[] = [];
   let dynamicAction = `/frame-purchase/${channelId}`;
-  let conditions = 0;
-  let membershipIsValidForAtLeastOneAddress = true;
   let totalKeysCount = 0;
   let erc20Allowance = BigInt(0);
+  let lockTokenSymbol = '';
+  let lockTokenDecimals = 18; // most ERC20 tokens have 18 decimals
+  let lockTokenPriceVisual = '';
 
   // Get the channel access rules
   let channelRules = await getChannelRules(channelId!);
-  console.log("frame-purchase => channelRules: ", channelRules);
-  console.log("frame-purchase => status: ", status);
-  console.log("frame-purchase => buttonValue: ", buttonValue);
 
-  if (status == "initial" || (status == "response" && buttonValue == "done")) {
-
-    textFrame = `To purchase or renew your key to access ${channelId} channel, let's start by veryfing some data.`;
+  if (status == 'initial' || (status == 'response' && buttonValue == 'done')) {
     // Step 1: Show the number of rules on the channel
-    let lockMetadata = '';
-    if (channelRules?.length! > 0) {
-      lockMetadata = await getLockName(channelRules![0].contract_address, channelRules![0].network);
-      console.log("frame-purchase => lockMetadata: ", lockMetadata);
-    }
+    textFrame = `The channel ${channelId} has ${channelRules?.length} rules. To purchase or renew your key(s), let's start by veryfing some data.`;
     dynamicIntents = [
       <Button value='verify'>verify</Button>
     ];
-
-  } else if (status == "response") {
-    console.log("frame-purchase => status: inside response");
+  } else if (status == 'response') {
     const payload = await req.json();
-    console.log("frame-purchase => payload: ", payload);
     if (process.env.NODE_ENV === 'production') {
-      console.log("frame-purchase => status: before validation");
       const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-      console.log("frame-purchase => frameActionResponse: ", frameActionResponse);
       if (frameActionResponse.valid) {
         ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
-        console.log("frame-purchase => ethAddresses: ", ethAddresses);
-        // let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
         console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_ACTION_VALID]);
       } else {
         console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_ACTION_INVALID]);
       }
     } else {
-      // For local development
-      ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
+      // For local development only
+      ethAddresses = [process.env.APP_TEST_ADDRESS!];
     }
-    if (buttonValue == 'verify') {
-      console.log("frame-purchase => status: inside verify");
-      console.log("frame-purchase => channelRules: ", channelRules.length);
-      // Verify there's at least one rule
-      if (channelRules.length > 0) {
-        // Verify the user doesn't have a valid membership
-        console.log("frame-purchase => before membershipIsValidForAtLeastOneAddress");
-        membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(ethAddresses, channelRules);
-        console.log("frame-purchase => membershipIsValidForAtLeastOneAddress: ", membershipIsValidForAtLeastOneAddress);
-        if (membershipIsValidForAtLeastOneAddress) {
-          textFrame = `You already have a valid key to access ${channelId} channel. So just keep casting on your favorite channel!`;
-          dynamicIntents = [
-            <Button value='done'>complete</Button>
-          ];
-        } else {
-          // Verify the user doesn't have an expired membership
+    if (ethAddresses.length > 0) {
+      const prevBtn = (index: number) => {
+        if (channelRules.length > 0 && index > 0) {
+          return (<Button value={`page-${index - 1}`}>prev</Button>);
+        }
+      };
+      const nextBtn = (index: number) => {
+        if (channelRules.length > (index + 1)) {
+          return (<Button value={`page-${index + 1}`}>next</Button>);
+        }
+      };
+      if (buttonValue == 'verify' || buttonValue?.startsWith("page-")) {
+        if (channelRules.length > 0) {
+          let currentRule: any;
+          let currentPage = 0;
+          if (buttonValue == 'verify') {
+            currentRule = channelRules[0];
+          } else if (buttonValue?.startsWith("page-")) {
+            let [_, page] = buttonValue!.split("-");
+            currentPage = parseInt(page);
+            currentRule = channelRules[currentPage];
+          }
+          // Verify the user doesn't have a valid membership the first rule
+          let lockName = await getLockName(currentRule.contract_address, currentRule.network);
+          let lockPrice = await getLockPrice(currentRule.contract_address, currentRule.network);
+          let membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(ethAddresses, [currentRule]);
           let keyCounts = await Promise.all(
             ethAddresses.map((ethAddress) =>
-              getLockTotalKeys(ethAddress, channelRules[0].contract_address, channelRules[0].network)
+              getLockTotalKeys(ethAddress, currentRule.contract_address, currentRule.network)
             )
           );
           let totalKeysCount = keyCounts.reduce((sum, count) => sum + Number(count), 0);
-          console.log("frame-purchase => totalKeysCount: ", totalKeysCount);
-          let lockTokenAddress = await getLockTokenAddress(channelRules[0].contract_address, channelRules[0].network);
-          console.log("frame-purchase => lockTokenAddress: ", lockTokenAddress);
-          let lockPrice = await getLockPrice(channelRules[0].contract_address, channelRules[0].network);
-          console.log("frame-purchase => lockPrice: ", lockPrice);
-          let some = parseEther(lockPrice.toString());
+          let tokenId = await getFirstTokenIdOfOwner(ethAddresses, totalKeysCount, currentRule.contract_address, currentRule.network);
+          let lockTokenAddress = await getLockTokenAddress(currentRule.contract_address, currentRule.network);
           if (lockTokenAddress == process.env.ZERO_ADDRESS) {
-            // to pass the validation
-            erc20Allowance = lockPrice;
+            // if the token address is zero address, then it's ether
+            lockTokenSymbol = 'ETH';
+            erc20Allowance = lockPrice; // txs with ETH don't need approval
           } else {
-            erc20Allowance = await getErc20Allowance(ethAddresses[0], lockTokenAddress, channelRules[0].contract_address, channelRules[0].network);
+            lockTokenSymbol = await getErc20Symbol(lockTokenAddress, currentRule.network);
+            lockTokenDecimals = await getErc20Decimals(lockTokenAddress, currentRule.network);
+            lockTokenPriceVisual = formatUnits(lockPrice, lockTokenDecimals);
+            erc20Allowance = await getErc20Allowance(ethAddresses[0], lockTokenAddress, currentRule.contract_address, currentRule.network);
           }
-          console.log("frame-purchase => erc20Allowance: ", erc20Allowance);
 
-          if (erc20Allowance >= lockPrice) {
-            console.log(`${lockPrice} >= ${erc20Allowance}`);
-            if (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0) {
-              // Then the user has no keys, so let's suggest to buy a new key
-              textFrame = `You don't have a key to access ${channelId} channel. Let's mint one:`;
-              dynamicIntents = [
-                <Button value='done'>back</Button>,
-                // '/tx-purchase/:lockAddress/:network'
-                <Button.Transaction target={`/tx-purchase/${channelRules[0].contract_address}/${channelRules[0].network}/${ethAddresses[0]}`}>buy</Button.Transaction>
-              ];
-            } else {
-              // One or more keys are expired, so let's renew the first we found
-              if (totalKeysCount > 0) {
-                console.log("frame-purchase => renew before getFirstTokenIdOfOwner");
-                let tokenId = await getFirstTokenIdOfOwner(ethAddresses[0], totalKeysCount, channelRules[0].contract_address, channelRules[0].network);
-                console.log("frame-purchase => renew tokenId: ", tokenId);
-                console.log("frame-purchase => renew target: ", `/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}`);
-                textFrame = `You have an expired key. Let's renew it:`;
-                dynamicIntents = [
-                  <Button value='done'>back</Button>,
-                  // /tx-renew/:lockAddress/:network/:tokenId
-                  <Button.Transaction target={`/tx-renew/${channelRules[0].contract_address}/${channelRules[0].network}/${tokenId}/${lockPrice}`}>renew</Button.Transaction>
-                ];
-              } else {
-                textFrame = `We couldn't find any expired keys. Please try again later.`;
-                dynamicIntents = [
-                  <Button value='done'>back</Button>,
-                ];
-              }
-            }
-          } else {
-            textFrame = `Before buy or renew your membership, let's approve an allowance for the price of the key:`;
-            console.log("frame-purchase => approve before calling tx-approval");
+          // is membership renewable or allowed to buy a new one?
+          // if yes, then show the 'increase allowance' button
+          if (membershipIsValidForAtLeastOneAddress) {
+            // if membership is valid, then if it's renewable, show the expiration date too
+            let keyExpirationInSeconds = await getTokenExpiration(tokenId, currentRule.contract_address, currentRule.network);
+            // console.log("keyExpiration type: ", typeof keyExpirationInSeconds);
+            let keyExpirationMiliseconds = new Date(Number(keyExpirationInSeconds) * 1000); // Convert to milliseconds
+            const options: Intl.DateTimeFormatOptions = {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: 'numeric',
+              second: 'numeric',
+              timeZoneName: 'short', // Optional: Show timezone
+            };
+            let keyExpirationString = keyExpirationMiliseconds.toLocaleString(undefined, options);
+            textFrame = `${currentRule.network}:${lockName}, you own a valid membership for this lock, and it expires on ${keyExpirationString}.`;
             dynamicIntents = [
-              <Button value='done'>back</Button>,
-              // /tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network
-              <Button.Transaction target={`/tx-approval/${lockTokenAddress}/${lockPrice}/${channelRules[0].contract_address}/${channelRules[0].network}`}>approval</Button.Transaction>
+              prevBtn(currentPage),
+              nextBtn(currentPage),
+            ];
+          } else {
+            textFrame = `${currentRule.network}:${lockName}, you don't own a valid membership for this lock. It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
+
+            const allowBtn = () => {
+              if (erc20Allowance < lockPrice) {
+                return (
+                  <Button value={`approval-${0}`}>increase allowance</Button>
+                );
+              }
+            };
+
+            const buyBtn = () => {
+              if ((erc20Allowance >= lockPrice) && (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0)) {
+                return (
+                  // /tx-purchase/:lockAddress/:network/:ethAddress
+                  <Button.Transaction target={`/tx-purchase/${currentRule.network}/${currentRule.contract_address}/${ethAddresses[0]}`}>buy</Button.Transaction>
+                );
+              }
+            };
+
+            const renewBtn = async () => {
+              if ((erc20Allowance >= lockPrice) && (totalKeysCount > 0)) {
+                // Before renewing the key, let's verify if it is renewable
+                let isRenewable = true;
+                if (isRenewable) {
+                  // One or more keys are expired, so let's renew the first we found
+                  if (tokenId > 0) {
+                    return (
+                      // /tx-renew/:network/:lockAddress/:tokenId/:price
+                      <Button.Transaction target={`/tx-renew/${currentRule.network}/${currentRule.contract_address}/${tokenId}/${lockPrice}`}>renew</Button.Transaction>
+                    );
+                  }
+                }
+              }
+            };
+
+            dynamicIntents = [
+              prevBtn(currentPage),
+              nextBtn(currentPage),
+              allowBtn(),
+              buyBtn(),
+              await renewBtn(),
             ];
           }
+        } else {
+          textFrame = `There are no rules to purchase a key on channel ${channelId}.`;
         }
+      } else if (buttonValue?.startsWith("approval-")) {
+        textFrame = `Do you want to approve one time (default), or multiple times? (set a number higher than 1)`;
+        console.log("approval-: start");
+        let [_, page] = buttonValue!.split("-");
+        let currentPage = parseInt(page);
+        let currentRule = channelRules[currentPage];
+        let lockTokenAddress = await getLockTokenAddress(currentRule.contract_address, currentRule.network);
+        let lockPrice = await getLockPrice(currentRule.contract_address, currentRule.network);
+        dynamicIntents = [
+          <TextInput placeholder="Amount..." />,
+          <Button.Transaction target={`/tx-approval/${currentRule.network}/${currentRule.contract_address}/${lockTokenAddress}/${lockPrice}`}>approve</Button.Transaction>
+        ];
+        console.log("approval-: end");
       }
+
+    } else {
+      textFrame = "It seems you don't have any eth address verified. Please verify at least one address to proceed.";
     }
+
   }
 
   return c.res({
+    title: 'Members Only - Membership Purchase',
     image: (
       <div
         style={{
@@ -382,7 +423,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
       </div>
     ),
     intents: dynamicIntents,
-    // action: dynamicAction
+    action: dynamicAction
   });
 
 });
@@ -420,7 +461,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
       }
     } else {
       // For local development
-      ethAddresses = ["0xe8f5533ba4C562b2162e8CF9B769A69cd28e811D"];
+      ethAddresses = [process.env.APP_TEST_ADDRESS!];
       interactorIsChannelLead = true;
     }
   }
@@ -657,6 +698,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   //   intents: dynamicIntents,
   // })
   return c.res({
+    title: 'Members Only - Channel Setup',
     image: (
       <div
         style={{
@@ -707,21 +749,24 @@ app.transaction('/tx-referrer-fee/:lockAddress/:network/:feeBasisPoint', (c) => 
   });
 });
 
-app.transaction('/tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network', async (c) => {
-  const { req } = c;
+app.transaction('/tx-approval/:network/:lockAddress/:lockTokenAddress/:lockPrice', async (c) => {
+  const { inputText, req } = c;
+  let network = req.param('network');
+  let lockAddress = req.param('lockAddress');
   let lockTokenAddress = req.param('lockTokenAddress');
   let lockPrice = req.param('lockPrice');
-  let lockAddress = req.param('lockAddress');
-  let network = req.param('network');
-  let paramLockTokenAddress = lockTokenAddress as `0x${string}`
-  let paramLockAddress = lockAddress as `0x${string}`
-  let paramLockPrice = BigInt(lockPrice);
+  let paramLockTokenAddress = lockTokenAddress as `0x${string}`;
+  let paramLockAddress = lockAddress as `0x${string}`;
   type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
   let paramChainId: EipChainId = getEipChainId(network);
+  console.log("tx-approval => inputText: ", inputText);
+  let customTimes = parseInt(inputText!);
+  console.log("tx-approval => customTimes: ", customTimes);
+  let price = customTimes > 1 ? BigInt(customTimes) * BigInt(lockPrice) : BigInt(lockPrice);
 
   // Logs
   console.log("tx-approval => lockTokenAddress: ", paramLockTokenAddress);
-  console.log("tx-approval => lockPrice: ", paramLockPrice);
+  console.log("tx-approval => lockPrice: ", price);
   console.log("tx-approval => lockAddress: ", paramLockAddress);
   console.log("tx-approval => network: ", network);
   console.log("tx-approval => chainId: ", paramChainId);
@@ -732,16 +777,16 @@ app.transaction('/tx-approval/:lockTokenAddress/:lockPrice/:lockAddress/:network
     functionName: 'approve',
     args: [
       paramLockAddress, // spender address
-      paramLockPrice, // amount uint256
+      price, // amount uint256
     ],
     to: paramLockTokenAddress
   });
 });
 
-app.transaction('/tx-purchase/:lockAddress/:network/:userAddress', async (c) => {
+app.transaction('/tx-purchase/:network/:lockAddress/:userAddress', async (c) => {
   const { req } = c;
-  let lockAddress = req.param('lockAddress');
   let network = req.param('network');
+  let lockAddress = req.param('lockAddress');
   let userAddress = req.param('userAddress');
   let lockPrice = await getLockPrice(lockAddress, network);
 
@@ -774,10 +819,10 @@ app.transaction('/tx-purchase/:lockAddress/:network/:userAddress', async (c) => 
   });
 });
 
-app.transaction('/tx-renew/:lockAddress/:network/:tokenId/:price', (c) => {
+app.transaction('/tx-renew/:network/:lockAddress/:tokenId/:price', (c) => {
   const { req } = c;
-  let lockAddress = req.param('lockAddress');
   let network = req.param('network');
+  let lockAddress = req.param('lockAddress');
   let tokenId = req.param('tokenId');
   let price = req.param('price');
 

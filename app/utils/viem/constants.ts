@@ -110,11 +110,13 @@ export const getTotalSupply = async (lockAddress: string, network: string): Prom
   return totalSupply;
 }
 
-export const getFirstTokenIdOfOwner = async (ethAddress: string, totalKeysCount: number, contractAddress: string, network: string) => {
-  for (let index = 0; index < totalKeysCount; index++) {
-    const idToken = await getTokenOfOwnerByIndex(ethAddress, index, contractAddress, network);
-    if (idToken > 0) {
-      return idToken; // Found an owned key, return the idToken
+export const getFirstTokenIdOfOwner = async (userAddresses: string[], totalKeysCount: number, contractAddress: string, network: string) => {
+  for (const userAddress of userAddresses) {
+    for (let index = 0; index < totalKeysCount; index++) {
+      const idToken = await getTokenOfOwnerByIndex(userAddress, index, contractAddress, network);
+      if (idToken > 0) {
+        return idToken; // Found an owned key, return the idToken
+      }
     }
   }
   return 0; // No owned keys found
@@ -131,31 +133,17 @@ export const getTokenOfOwnerByIndex = async (userAddress: string, index: number,
   return count;
 };
 
-// export const doAddressesHaveValidMembershipInRules = async (
-//   userAddresses: string[],
-//   channelRules: {
-//     id: number,
-//     channel_id: string,
-//     operator: string,
-//     rule_behavior: string,
-//     network: string,
-//     contract_address: string,
-//     created_at: string,
-//     updated_at: string | null
-//   }[]
-// ) => {
-//   const membershipPromises = userAddresses.flatMap(userAddress =>
-//     channelRules.map(rule => getLockIsValid(userAddress, rule.contract_address, rule.network))
-//   );
-
-//   try {
-//     await Promise.any(membershipPromises); // Wait for at least ONE to resolve
-//     return true; // At least one membership is valid
-//   } catch (error) {
-//     // If ALL promises are rejected (no valid membership found)
-//     return false;
-//   }
-// };
+export const getTokenExpiration = async (tokenId: number, lockAddress: string, network: string): Promise<any> => {
+  let client = getClient(network);
+  const expiration = await client.readContract({
+    address: lockAddress as `0x${string}`,
+    abi: contracts.PublicLockV14.abi,
+    functionName: 'keyExpirationTimestampFor',
+    args: [tokenId],
+  });
+  console.log(`What's the expiration date of the token ${tokenId} in lock ${lockAddress} deployed on ${network}? It is ${expiration}`);
+  return expiration;
+};
 
 export const doAddressesHaveValidMembershipInRules = async (
   userAddresses: string[],
@@ -188,6 +176,28 @@ export const getErc20Allowance = async (userAddress: string, tokenAddress: strin
     abi: erc20Abi,
     functionName: 'allowance',
     args: [userAddress as `0x${string}`, lockAddress as `0x${string}`],
+  });
+  return allowance;
+}
+
+export const getErc20Symbol = async (tokenAddress: string, network: string): Promise<any> => {
+  let client = getClient(network);
+  const symbol = await client.readContract({
+    address: tokenAddress as `0x${string}`,
+    abi: erc20Abi,
+    functionName: 'symbol',
+    args: [],
+  });
+  return symbol;
+}
+
+export const getErc20Decimals = async (tokenAddress: string, network: string): Promise<any> => {
+  let client = getClient(network);
+  const allowance = await client.readContract({
+    address: tokenAddress as `0x${string}`,
+    abi: erc20Abi,
+    functionName: 'decimals',
+    args: [],
   });
   return allowance;
 }
