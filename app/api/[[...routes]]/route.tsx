@@ -15,6 +15,7 @@ import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getErc20Decim
 import { contracts } from '@unlock-protocol/contracts';
 
 const app = new Frog({
+  title: 'Members Only',
   assetsPath: '/',
   basePath: '/api',
   ui: { vars },
