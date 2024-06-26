@@ -408,6 +408,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   let interactorIsChannelLead = false;
   let channelId = req.param('channelId');
   let textFrame = "";
+  let dynamicImage = '';
   let dynamicIntents: any[] = [];
   let conditions = 0;
 
@@ -442,12 +443,11 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   if (status == "initial" || (status == "response" && buttonValue == "done")) {
 
     // Step 1: Show the number of rules on the channel
-    let lockMetadata;
+    let lockName;
     if (channelRules?.length! > 0) {
-      lockMetadata = await getLockName(channelRules![0].contract_address, channelRules![0].network);
+      lockName = await getLockName(channelRules![0].contract_address, channelRules![0].network);
     }
-    textFrame = `${channelId} channel has ${conditions == 0 ? "no" : conditions} ${(conditions < 2 ? "rule" : "rules")}.`;
-
+    dynamicImage = `/api/frame-setup-initial-image/${channelId}/${conditions}`;
     if (channelRules?.length! == 0) {
       dynamicIntents = [
         <Button value='add'>add</Button>
@@ -464,37 +464,34 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         ];
       }
     }
-  } else if (status == "response") {
+  } else if (status == 'response') {
     if (interactorIsChannelLead) {
       // Step 2: Show action to achieve, either add or remove a rule
-      if (buttonValue == "add" || buttonValue == "remove") {
+      if (buttonValue == 'add' || buttonValue == 'remove') {
         console.log("add or remove selection: start");
-        if (buttonValue == "add") {
-          textFrame = `To add a rule on channel ${channelId}, start by selecting the network the contract is deployed on.`;
+        if (buttonValue == 'add') {
+          dynamicImage = `/api/frame-setup-network-image/${channelId}`;
           dynamicIntents = [
             <Button value='base'>base</Button>,
             <Button value='optimism'>optimism</Button>,
             <Button value='arbitrum'>arbitrum</Button>
           ];
-        } else if (buttonValue == "remove") {
+        } else if (buttonValue == 'remove') {
           const nextBtn = (index: number) => {
             if (channelRules.length > 1 && index) {
               return (<Button value={`removepage-${index}`}>next</Button>);
             }
           };
           if (channelRules?.length! == 0) {
-            textFrame = `There are no rules to remove on channel ${channelId}.`;
+            dynamicImage = `/api/frame-setup-no-rules-image/${channelId}`;
             dynamicIntents = [
               <Button value='done'>back</Button>
             ];
           } else {
-            let firstContractAddress = channelRules[0].contract_address;
-            let lockMetadata = await getLockName(channelRules[0].contract_address, channelRules[0].network);
-            if (lockMetadata) {
-              textFrame = `${channelRules[0].network}: ${lockMetadata}`;
-            } else {
-              textFrame = `${channelRules[0].network}: ${shortenAddress(channelRules[0].contract_address)}`;
-            }
+            let currentRule = channelRules[0];
+            let firstContractAddress = currentRule.contract_address;
+            let lockName = await getLockName(currentRule.contract_address, currentRule.network);
+            dynamicImage = `/api/frame-setup-remove-rule-image/${channelId}/${currentRule.network}/${lockName}/${currentRule.contract_address}`;
             dynamicIntents = [
               nextBtn(1),
               <Button value={`removeconfirm-${firstContractAddress}`}>confirm remove</Button >,
@@ -502,7 +499,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           }
         }
         console.log("add or remove selection: end");
-      } else if (buttonValue == "base" || buttonValue == "optimism" || buttonValue == "arbitrum") {
+      } else if (buttonValue == 'base' || buttonValue == 'optimism' || buttonValue == 'arbitrum') {
         console.log("network selection: start");
         // Step 3: Show the contract addresses deployed on the selected network
         let network = buttonValue;
@@ -516,8 +513,9 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         console.log("networks => contractAddresses: ", contractAddresses);
 
         if (contractAddresses.length > 0) {
-          let lockMetadata = await getLockName(contractAddresses[0], network);
-          textFrame = `${network}: ${lockMetadata}`;
+          let lockName = await getLockName(contractAddresses[0], network);
+          dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${channelRules[0].network}/${lockName}/${channelRules[0].contract_address}`;
+
           // we've got the contract addresses, now we need to get if referral is set
           // let referralFee = await getMembersOnlyReferralFee(contractAddresses[0], network);
           // if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
@@ -525,7 +523,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           //   // do aditional logic here
           // }
         } else {
-          textFrame = "No lock found deployed from your accounts, please set one on the input and click confirm.";
+          dynamicImage = `/api/frame-setup-no-lock-image/${channelId}`;
         }
 
         const nextBtn = (index: number) => {
@@ -560,9 +558,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         //   // do aditional logic here
         // }
 
-        let lockMetadata = await getLockName(contractAddresses[currentPage], network);
-        textFrame = `${network}: ${lockMetadata}`;
-
         const prevBtn = (index: number) => {
           if (contractAddresses.length > 0 && index > 0) {
             return (<Button value={`addpage-${network}-${index - 1}`}>prev</Button>);
@@ -574,6 +569,8 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           }
         };
 
+        let lockName = await getLockName(contractAddresses[currentPage], network);
+        dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${channelRules[currentPage].contract_address}`;
         dynamicIntents = [
           <TextInput placeholder="Contract Address..." />,
           prevBtn(currentPage),
@@ -591,7 +588,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         // Validate there is no rule with the same contract address for this channel
         let ruleExists = await doesRuleWithContractExist(channelId, contractAddress);
         if (ruleExists) {
-          textFrame = `A rule with this contract address already exists. Please select another contract address.`;
+          dynamicImage = `/api/frame-setup-repeated-rule-image/${channelId}`;
           dynamicIntents = [
             <TextInput placeholder="Contract Address..." />,
             <Button value={'done'}>back</Button >,
@@ -600,14 +597,14 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         } else {
           let insertError = await insertChannelRule(channelId, network, contractAddress, "AND", "ALLOW");
           if (insertError) {
-            textFrame = `Error adding the rule.`;
+            dynamicImage = `/api/frame-setup-add-error-rule-image/${channelId}`;
             dynamicIntents = [
               <TextInput placeholder="Contract Address..." />,
               <Button value={'done'}>back</Button >,
               <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>try again</Button >,
             ];
           } else {
-            textFrame = `Rule added.`;
+            dynamicImage = `/api/frame-setup-add-complete-rule-image/${channelId}`;
             dynamicIntents = [
               <Button value={'done'}>complete</Button>,
             ];
@@ -620,12 +617,8 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         let [_, page] = buttonValue!.split("-");
         let currentPage = parseInt(page);
         let currentRule = channelRules![currentPage];
-        let lockMetadata = await getLockName(currentRule.contract_address, currentRule.network);
-        if (lockMetadata) {
-          textFrame = `${currentRule.network}: ${lockMetadata}`;
-        } else {
-          textFrame = `${currentRule.network}: ${shortenAddress(currentRule.contract_address)}`;
-        }
+        let lockName = await getLockName(currentRule.contract_address, currentRule.network);
+        dynamicImage = `/api/frame-setup-remove-rule-image/${channelId}/${currentRule.network}/${lockName}/${currentRule.contract_address}`;
         const prevBtn = (index: number) => {
           if (channelRules.length > 0 && index > 0) {
             return (<Button value={`removepage-${index - 1}`}>prev</Button>);
@@ -647,13 +640,13 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         let [_, contractAddress] = buttonValue!.split("-");
         let deleteError = await deleteChannelRule(channelId, contractAddress);
         if (deleteError) {
-          textFrame = `Error adding the rule.`;
+          dynamicImage = `/api/frame-setup-remove-error-rule-image/${channelId}`;
           dynamicIntents = [
             <Button value={'done'}>Restart</Button >,
             <Button value={`removeconfirm-${contractAddress}`}>try again</Button >,
           ];
         } else {
-          textFrame = `Rule removed.`;
+          dynamicImage = `/api/frame-setup-remove-complete-rule-image/${channelId}`;
           dynamicIntents = [
             <Button value={'done'}>complete</Button>,
           ];
@@ -662,48 +655,14 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
       }
     } else {
       textFrame = "This is a @membersonly frame to configure rules, know more about me at my profile.";
+      dynamicImage = `/api/frame-setup-no-access-image/${channelId}`;
       dynamicIntents = [];
     }
   }
   console.log("call end: frame-setup-channel/:channelId");
-  // return c.res({
-  //   image: `${process.env.APP_URL}/api/frame-setup-image/${textFrame}`,
-  //   intents: dynamicIntents,
-  // })
   return c.res({
     title: 'Members Only - Channel Setup',
-    image: (
-      <div
-        style={{
-          alignItems: 'center',
-          background: 'black',
-          backgroundSize: '100% 100%',
-          display: 'flex',
-          flexDirection: 'column',
-          flexWrap: 'nowrap',
-          height: '100%',
-          justifyContent: 'center',
-          textAlign: 'center',
-          width: '100%',
-        }}
-      >
-        <div
-          style={{
-            color: 'white',
-            fontSize: 60,
-            fontStyle: 'normal',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.4,
-            marginTop: 30,
-            padding: '0 120px',
-            whiteSpace: 'pre-wrap',
-            display: 'flex',
-          }}
-        >
-          {textFrame}
-        </div>
-      </div>
-    ),
+    image: dynamicImage,
     intents: dynamicIntents,
   });
 });
@@ -849,7 +808,7 @@ app.image('/frame-purchase-initial-image/:channelId/:rulesCount', neynarMiddlewa
         borderColor='yellow'
       >
         <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Heading color={'black'}>@membersonly user</Heading>
           <Spacer size="20" />
           <Text color={'black'} size="20">
             Channel: {channelId}
@@ -1057,6 +1016,442 @@ app.image('/frame-purchase-no-rules-image/:channelId', neynarMiddleware, (c) => 
     ),
   });
 });
+
+app.image('/frame-setup-initial-image/:channelId/:rulesCount', neynarMiddleware, (c) => {
+  const { channelId, rulesCount } = c.req.param();
+  let textFrame = `This channel has ${rulesCount} ${(parseInt(rulesCount) != 1) ? "rules" : "rule"}. As channel lead, you can add or remove rules.`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-network-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textFrame = `To add a rule on this channel, start by selecting the network the membership is deployed on.`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-no-rules-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textFrame = `There are no rules to remove on this channel.`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-repeated-rule-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textFrame = `A rule with this membership already exists. Please select another membership.`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-no-lock-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textFrame = "There are no locks deployed from your accounts, please set one on the input and click confirm. (It must be an Unlock contract)";
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-no-access-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textFrame = "To access this frame, you need to be the owner of the this channel.";
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-add-rule-image/:channelId/:network/:lockName/:lockAddress', neynarMiddleware, (c) => {
+  const { channelId, network, lockName, lockAddress } = c.req.param();
+  let textFrame = `Do you want to add the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network as a requirement to cast on this channel?`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-add-complete-rule-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textFrame = `The rule was added successfully.`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-add-error-rule-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textFrame = `There was an error trying to add the rule. Please, try again.`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-remove-rule-image/:channelId/:network/:lockName/:lockAddress', neynarMiddleware, (c) => {
+  const { channelId, network, lockName, lockAddress } = c.req.param();
+  let textFrame = `Do you want to remove the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network as a requirement to cast on this channel?`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-remove-complete-rule-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textFrame = `The rule was removed successfully.`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-remove-error-rule-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textFrame = `There was an error trying to remove the rule. Please, try again.`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+
+
+
 
 //_______________________________________________________________________________________________________________________
 // Utils
