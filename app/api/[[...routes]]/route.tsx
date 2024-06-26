@@ -323,6 +323,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
             // let keyExpirationString = keyExpirationMiliseconds.toLocaleString(undefined, options);
             dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/true/${emptyParam}/${emptyParam}`;
             dynamicIntents = [
+              <Button value='done'>complete</Button>,
               prevBtn(currentPage),
               nextBtn(currentPage),
             ];
