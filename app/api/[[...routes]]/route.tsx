@@ -1,7 +1,7 @@
 /** @jsxImportSource frog/jsx */
 
 import { Button, Frog, TextInput } from 'frog';
-import { Box, Divider, Heading, Text, VStack, Rows, Row, Spacer, vars } from '@/app/utils/frog/ui';
+import { Box, Divider, Heading, Text, VStack, Rows, Row, Spacer, vars, HStack } from '@/app/utils/frog/ui';
 import { devtools } from 'frog/dev';
 import { neynar, type NeynarVariables } from 'frog/middlewares';
 import { handle } from 'frog/next';
@@ -74,6 +74,8 @@ enum FramePurchaseResult {
   CAST_FRAME_ERROR,
   SETUP_TEXT,
   ROUTE_ERROR,
+  FRAME_MEMBERSHIP_VALID,
+  FRAME_MEMBERSHIP_INVALID
 }
 
 const statusMessage = {
@@ -99,6 +101,8 @@ const statusMessage = {
   [ApiRoute.FRAME_PURCHASE]: {
     [FramePurchaseResult.FRAME_ACTION_VALID]: `${ApiRoute.FRAME_PURCHASE} => FRAME ACTION IS VALID`,
     [FramePurchaseResult.FRAME_ACTION_INVALID]: `${ApiRoute.FRAME_PURCHASE} => FRAME ACTION IS INVALID`,
+    [FramePurchaseResult.FRAME_MEMBERSHIP_VALID]: `${ApiRoute.FRAME_PURCHASE} => UNLOCK MEMBERSHIP IS VALID`,
+    [FramePurchaseResult.FRAME_MEMBERSHIP_INVALID]: `${ApiRoute.FRAME_PURCHASE} => UNLOCK MEMBERSHIP IS INVALID`,
   },
 };
 
@@ -223,20 +227,22 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
   let ethAddresses: string[] = [];
   let channelId = req.param('channelId');
   let textFrame = "";
+  let dynamicImage = '';
   let dynamicIntents: any[] = [];
-  let dynamicAction = `/frame-purchase/${channelId}`;
+  let dynamicAction = '';//`/api/frame-purchase/${channelId}`;
   let totalKeysCount = 0;
   let erc20Allowance = BigInt(0);
   let lockTokenSymbol = '';
   let lockTokenDecimals = 18; // most ERC20 tokens have 18 decimals
   let lockTokenPriceVisual = '';
+  let emptyParam = '_';
 
   // Get the channel access rules
   let channelRules = await getChannelRules(channelId!);
 
   if (status == 'initial' || (status == 'response' && buttonValue == 'done')) {
     // Step 1: Show the number of rules on the channel
-    textFrame = `The channel ${channelId} has ${channelRules?.length} rules. To purchase or renew your key(s), let's start by veryfing some data.`;
+    dynamicImage = `/api/frame-purchase-initial-image/${channelId}/${channelRules?.length}`;
     dynamicIntents = [
       <Button value='verify'>verify</Button>
     ];
@@ -298,32 +304,31 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
             lockTokenPriceVisual = formatUnits(lockPrice, lockTokenDecimals);
             erc20Allowance = await getErc20Allowance(ethAddresses[0], lockTokenAddress, currentRule.contract_address, currentRule.network);
           }
-
           // is membership renewable or allowed to buy a new one?
           // if yes, then show the 'increase allowance' button
           if (membershipIsValidForAtLeastOneAddress) {
+            console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_MEMBERSHIP_VALID]);
             // if membership is valid, then if it's renewable, show the expiration date too
-            let keyExpirationInSeconds = await getTokenExpiration(tokenId, currentRule.contract_address, currentRule.network);
-            // console.log("keyExpiration type: ", typeof keyExpirationInSeconds);
-            let keyExpirationMiliseconds = new Date(Number(keyExpirationInSeconds) * 1000); // Convert to milliseconds
-            const options: Intl.DateTimeFormatOptions = {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: 'numeric',
-              second: 'numeric',
-              timeZoneName: 'short', // Optional: Show timezone
-            };
-            let keyExpirationString = keyExpirationMiliseconds.toLocaleString(undefined, options);
-            textFrame = `${currentRule.network}:${lockName}, you own a valid membership for this lock, and it expires on ${keyExpirationString}.`;
+            // let keyExpirationInSeconds = await getTokenExpiration(tokenId, currentRule.contract_address, currentRule.network);
+            // let keyExpirationMiliseconds = new Date(Number(keyExpirationInSeconds) * 1000); // Convert to milliseconds
+            // const options: Intl.DateTimeFormatOptions = {
+            //   year: 'numeric',
+            //   month: 'long',
+            //   day: 'numeric',
+            //   hour: 'numeric',
+            //   minute: 'numeric',
+            //   second: 'numeric',
+            //   timeZoneName: 'short', // Optional: Show timezone
+            // };
+            // let keyExpirationString = keyExpirationMiliseconds.toLocaleString(undefined, options);
+            dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/true/${emptyParam}/${emptyParam}`;
             dynamicIntents = [
               prevBtn(currentPage),
               nextBtn(currentPage),
             ];
           } else {
-            textFrame = `${currentRule.network}:${lockName}, you don't own a valid membership for this lock. It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
-
+            console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_MEMBERSHIP_INVALID]);
+            dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/false/${lockTokenSymbol}/${lockTokenPriceVisual}`;
             const allowBtn = () => {
               if (erc20Allowance < lockPrice) {
                 return (
@@ -366,63 +371,30 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
             ];
           }
         } else {
-          textFrame = `There are no rules to purchase a key on channel ${channelId}.`;
+          dynamicImage = `/api/frame-purchase-no-rules-image/${channelId}`;
+          dynamicIntents = [
+            <Button value='verify'>verify</Button>
+          ];
         }
       } else if (buttonValue?.startsWith("approval-")) {
-        textFrame = `Do you want to approve one time (default), or multiple times? (set a number higher than 1)`;
-        console.log("approval-: start");
+        dynamicImage = `/api/frame-purchase-approval-image/${channelId}`;
         let [_, page] = buttonValue!.split("-");
         let currentPage = parseInt(page);
         let currentRule = channelRules[currentPage];
         let lockTokenAddress = await getLockTokenAddress(currentRule.contract_address, currentRule.network);
         let lockPrice = await getLockPrice(currentRule.contract_address, currentRule.network);
         dynamicIntents = [
-          <TextInput placeholder="Amount..." />,
+          <TextInput placeholder="amount..." />,
           <Button.Transaction target={`/tx-approval/${currentRule.network}/${currentRule.contract_address}/${lockTokenAddress}/${lockPrice}`}>approve</Button.Transaction>
         ];
-        console.log("approval-: end");
       }
-
     } else {
-      textFrame = "It seems you don't have any eth address verified. Please verify at least one address to proceed.";
+      dynamicImage = `/api/frame-purchase-no-address-image/${channelId}`;
     }
-
   }
-
   return c.res({
     title: 'Members Only - Membership Purchase',
-    image: (
-      <div
-        style={{
-          alignItems: 'center',
-          background: 'black',
-          backgroundSize: '100% 100%',
-          display: 'flex',
-          flexDirection: 'column',
-          flexWrap: 'nowrap',
-          height: '100%',
-          justifyContent: 'center',
-          textAlign: 'center',
-          width: '100%',
-        }}
-      >
-        <div
-          style={{
-            color: 'white',
-            fontSize: 60,
-            fontStyle: 'normal',
-            letterSpacing: '-0.025em',
-            lineHeight: 1.4,
-            marginTop: 30,
-            padding: '0 120px',
-            whiteSpace: 'pre-wrap',
-            display: 'flex',
-          }}
-        >
-          {textFrame}
-        </div>
-      </div>
-    ),
+    image: dynamicImage,
     intents: dynamicIntents,
     action: dynamicAction
   });
@@ -856,32 +828,235 @@ app.transaction('/tx-renew/:network/:lockAddress/:tokenId/:price', (c) => {
   });
 });
 
-// app.image('/frame-setup-image/:customText', (c) => {
-//   const { customText } = c.req.param();
-//   console.log('/frame-setup-image/:customText', customText);
-//   return c.res({
-//     image: (
-//       <Box
-//         grow
-//         alignHorizontal="center"
-//         backgroundColor="background"
-//         padding="32"
-//         borderStyle="solid"
-//         borderRadius="8"
-//         borderWidth="4"
-//         borderColor='yellow'
-//       >
-//         <VStack gap="4">
-//           <Heading color={'black'}>@membersonly Channel Bot</Heading>
-//           <Spacer size="20" />
-//           <Text color={'black'} size="20">
-//             {customText}
-//           </Text>
-//         </VStack>
-//       </Box>
-//     ),
-//   });
-// });
+app.image('/frame-purchase-initial-image/:channelId/:rulesCount', neynarMiddleware, (c) => {
+  const { channelId, rulesCount } = c.req.param();
+  let textFrame = `This channel has ${rulesCount} ${(parseInt(rulesCount) != 1) ? "rules" : "rule"}. To purchase or renew your key(s), lets start by veryfing some data.`;
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-purchase-rule-image/:channelId/:network/:lockName/:isValid/:lockTokenSymbol/:lockTokenPriceVisual', neynarMiddleware, (c) => {
+  const { channelId, network, lockName, isValid, lockTokenSymbol, lockTokenPriceVisual } = c.req.param();
+  const booleanMap = new Map([
+    ["true", true],
+    ["false", false],
+  ]);
+  console.log("frame-purchase-rule-image: isValid: ", isValid);
+  let textDescription = '';
+  let textPrice = '';
+  if (booleanMap.get(isValid)) {
+    textDescription = ` You own a valid membership for the lock "${lockName}", deployed on ${network} network.`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
+      },
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor='yellow'
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly user</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textDescription}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  } else {
+    textDescription = ` You dont own a valid membership for the lock "${lockName}", deployed on ${network} network.`;
+    textPrice = `It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
+      },
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor='yellow'
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly user</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textDescription}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textPrice}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+});
+
+app.image('/frame-purchase-approval-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textDescription = `Do you want to approve one time (default), or multiple times? (set a number higher than 1)`;
+
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly user</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textDescription}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-purchase-no-address-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textDescription = `It seems you dont have any eth address verified. Please verify at least one address to proceed.`;
+
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly user</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textDescription}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-purchase-no-rules-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textDescription = `It seems there are no rules currently to purchase for this channel. Please contact the channel lead to add rules.`;
+
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly user</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textDescription}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
 
 //_______________________________________________________________________________________________________________________
 // Utils
