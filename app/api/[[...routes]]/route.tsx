@@ -504,6 +504,8 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         console.log("network selection: start");
         // Step 3: Show the contract addresses deployed on the selected network
         let network = buttonValue;
+        // let currentRule = channelRules[0];
+        // console.log("currentRule: ", currentRule);
         const contractAddresses: string[] = (
           await Promise.all(
             ethAddresses.map(async (ethAddress) =>
@@ -511,11 +513,10 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
             )
           )
         ).flat();
-        console.log("networks => contractAddresses: ", contractAddresses);
 
         if (contractAddresses.length > 0) {
           let lockName = await getLockName(contractAddresses[0], network);
-          dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${channelRules[0].network}/${lockName}/${channelRules[0].contract_address}`;
+          dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
 
           // we've got the contract addresses, now we need to get if referral is set
           // let referralFee = await getMembersOnlyReferralFee(contractAddresses[0], network);
@@ -571,7 +572,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         };
 
         let lockName = await getLockName(contractAddresses[currentPage], network);
-        dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${channelRules[currentPage].contract_address}`;
+        dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}`;
         dynamicIntents = [
           <TextInput placeholder="Contract Address..." />,
           prevBtn(currentPage),
