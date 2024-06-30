@@ -11,7 +11,7 @@ import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse }
 import { Address, erc20Abi, formatUnits } from 'viem';
 import { deleteChannelRule, doesRuleWithContractExist, getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getContractsDeployed } from '@/app/utils/alchemy/constants';
-import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getErc20Decimals, getErc20Symbol, getFirstTokenIdOfOwner, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getTokenExpiration, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
+import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getErc20Decimals, getErc20Symbol, getFirstTokenIdOfOwner, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getMembersOnlyReferralFee, getTokenExpiration, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
 
 const app = new Frog({
@@ -519,32 +519,41 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           )
         ).flat();
 
-        if (contractAddresses.length > 0) {
-          let lockName = await getLockName(contractAddresses[0], network);
-          dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
-
-          // we've got the contract addresses, now we need to get if referral is set
-          // let referralFee = await getMembersOnlyReferralFee(contractAddresses[0], network);
-          // if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
-          //   textFrame = `The referral fee is below the minimum required. Please set at least ${process.env.MO_MINIMUM_REFERRAL_FEE!} basis points.`;
-          //   // do aditional logic here
-          // }
-        } else {
-          dynamicImage = `/api/frame-setup-no-lock-image/${channelId}`;
-        }
-
         const nextBtn = (index: number) => {
           if (contractAddresses.length > 1 && index < (contractAddresses.length - 1)) {
             return (<Button value={`addpage-${network}-${index + 1}`}>next</Button>);
           }
         };
 
-        dynamicIntents = [
-          <TextInput placeholder="Contract Address..." />,
-          <Button value={'done'}>back</Button >,
-          nextBtn(0),
-          <Button value={`addconfirm-${network}-${(contractAddresses.length > 0) ? contractAddresses[0] : process.env.ZERO_ADDRESS}`}>confirm add</Button >,
-        ];
+        if (contractAddresses.length > 0) {
+          let lockName = await getLockName(contractAddresses[0], network);
+          dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
+
+          // we've got the contract addresses, now we need to get if referral is set
+          let referralFee = await getMembersOnlyReferralFee(contractAddresses[0], network);
+          if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
+            dynamicImage = `/api/frame-setup-referrer-fee-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
+            dynamicIntents = [
+              <TextInput placeholder="Custom Referrer Fee..." />,
+              nextBtn(0),
+              <Button.Transaction target={`/tx-referrer-fee/${network}/${contractAddresses[0]}`}>set referrer fee</Button.Transaction>
+            ];
+          } else {
+            dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
+            dynamicIntents = [
+              <TextInput placeholder="Contract Address..." />,
+              <Button value={'done'}>back</Button >,
+              nextBtn(0),
+              <Button value={`addconfirm-${network}-${(contractAddresses.length > 0) ? contractAddresses[0] : process.env.ZERO_ADDRESS}`}>confirm add</Button >,
+            ];
+          }
+        } else {
+          dynamicImage = `/api/frame-setup-no-lock-image/${channelId}`;
+        }
+
+
+
+
         console.log("network selection: end");
       } else if (buttonValue!.startsWith("addpage-")) {
         console.log("addpage-: start");
@@ -559,12 +568,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           )
         ).flat();
 
-        // let referralFee = await getMembersOnlyReferralFee(contractAddresses[currentPage], network);
-        // console.log("referralFee: ", referralFee);
-        // if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
-        //   // do aditional logic here
-        // }
-
         const prevBtn = (index: number) => {
           if (contractAddresses.length > 0 && index > 0) {
             return (<Button value={`addpage-${network}-${index - 1}`}>prev</Button>);
@@ -577,13 +580,26 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         };
 
         let lockName = await getLockName(contractAddresses[currentPage], network);
-        dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}`;
-        dynamicIntents = [
-          <TextInput placeholder="Contract Address..." />,
-          prevBtn(currentPage),
-          nextBtn(currentPage),
-          <Button value={`addconfirm-${network}-${contractAddresses[currentPage]}`}>confirm add</Button >,
-        ];
+        let referralFee = await getMembersOnlyReferralFee(contractAddresses[currentPage], network);
+        console.log("referralFee: ", referralFee);
+        if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
+          dynamicImage = `/api/frame-setup-referral-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}`;
+          dynamicIntents = [
+            <TextInput placeholder="Custom Referrer Fee..." />,
+            prevBtn(currentPage),
+            nextBtn(currentPage),
+            <Button.Transaction target={`/tx-referral/${network}/${contractAddresses[currentPage]}`}>set referrer fee</Button.Transaction>
+          ];
+        } else {
+          dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}`;
+          dynamicIntents = [
+            <TextInput placeholder="Contract Address..." />,
+            prevBtn(currentPage),
+            nextBtn(currentPage),
+            <Button value={`addconfirm-${network}-${contractAddresses[currentPage]}`}>confirm add</Button >,
+          ];
+        }
+
         console.log("addpage-: end");
       } else if (buttonValue!.startsWith("addconfirm-")) {
         console.log("addconfirm-: start");
@@ -659,6 +675,11 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           ];
         }
         console.log("removeconfirm-: end");
+      } else if (buttonValue == '_t') {
+        dynamicImage = `/api/frame-purchase-tx-submitted-image/${channelId}`;
+        dynamicIntents = [
+          <Button value='done'>continue</Button>
+        ];
       }
     } else {
       textFrame = "This is a @membersonly frame to configure rules, know more about me at my profile.";
@@ -674,11 +695,20 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   });
 });
 
-app.transaction('/tx-referrer-fee/:lockAddress/:network/:feeBasisPoint', (c) => {
-  const { req } = c;
+app.transaction('/tx-referrer-fee/:network/:lockAddress', (c) => {
+  console.log("call start: tx-referrer-fee/:network/:lockAddress");
+  const { inputText, req } = c;
   let lockAddress = req.param('lockAddress');
   let network = req.param('network');
-  let feeBasisPoint = req.param('feeBasisPoint');
+  let customReferrerFee = parseInt(inputText!) * 100;
+  let feeBasisPoint;
+  if (customReferrerFee > parseInt(process.env.MO_MINIMUM_REFERRAL_FEE!)) {
+    feeBasisPoint = BigInt(customReferrerFee);
+  } else {
+    feeBasisPoint = BigInt(process.env.MO_MINIMUM_REFERRAL_FEE!);
+  }
+  console.log("tx-referrer-fee => MO_ADDRESS: ", process.env.MO_ADDRESS);
+  console.log("tx-referrer-fee => feeBasisPoint: ", feeBasisPoint);
   return c.contract({
     abi: contracts.PublicLockV14.abi,
     chainId: getEipChainId(network),
@@ -1255,6 +1285,42 @@ app.image('/frame-setup-no-lock-image/:channelId', neynarMiddleware, (c) => {
 app.image('/frame-setup-no-access-image/:channelId', neynarMiddleware, (c) => {
   const { channelId } = c.req.param();
   let textFrame = "To access this frame, you need to be the owner of the this channel.";
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
+      },
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor='yellow'
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
+
+app.image('/frame-setup-referrer-fee-image/:channelId/:network/:lockName/:lockAddress', neynarMiddleware, (c) => {
+  const { channelId, network, lockName, lockAddress } = c.req.param();
+  let textFrame = `To add a rule with the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network, please add a min. of 5% of referral fee to @membersonly for future purchases or renewals.`;
   return c.res({
     imageOptions: {
       headers: {
