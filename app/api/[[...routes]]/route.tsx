@@ -1,7 +1,7 @@
 /** @jsxImportSource frog/jsx */
 
 import { Button, FrameContext, Frog, TextInput } from 'frog';
-import { Box, Heading, Text, VStack, Spacer, vars } from '@/app/utils/frog/ui';
+import { Box, Heading, Text, VStack, Spacer, vars, Image } from '@/app/utils/frog/ui';
 import { devtools } from 'frog/dev';
 import { neynar, type NeynarVariables } from 'frog/middlewares';
 import { handle } from 'frog/next';
@@ -530,7 +530,7 @@ app.frame(
             </Button.Transaction>,
           ];
         } else if (buttonValue == '_t') {
-          dynamicImage = `/api/frame-purchase-tx-submitted-image/${channelId}`;
+          dynamicImage = `/api/frame-tx-submitted-image/${channelId}`;
           dynamicIntents = [<Button value="done">continue</Button>];
         }
       } else {
@@ -883,7 +883,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         }
         console.log('removeconfirm-: end');
       } else if (buttonValue == '_t') {
-        dynamicImage = `/api/frame-purchase-tx-submitted-image/${channelId}`;
+        dynamicImage = `/api/frame-tx-submitted-image/${channelId}`;
         dynamicIntents = [<Button value="done">continue</Button>];
       }
     } else {
@@ -1167,7 +1167,7 @@ app.image(
 );
 
 app.image(
-  '/frame-purchase-tx-submitted-image/:channelId',
+  '/frame-tx-submitted-image/:channelId',
   neynarMiddleware,
   (c) => {
     const { channelId } = c.req.param();

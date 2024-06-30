@@ -12,6 +12,7 @@ export const {
   Spacer,
   Text,
   VStack,
+  Image,
   vars,
 } = createSystem({
   colors: {
