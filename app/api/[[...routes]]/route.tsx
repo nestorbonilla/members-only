@@ -1,17 +1,17 @@
 /** @jsxImportSource frog/jsx */
 
 import { Button, Frog, TextInput } from 'frog';
-import { Box, Divider, Heading, Text, VStack, Rows, Row, Spacer, vars, HStack } from '@/app/utils/frog/ui';
+import { Box, Heading, Text, VStack, Spacer, vars } from '@/app/utils/frog/ui';
 import { devtools } from 'frog/dev';
 import { neynar, type NeynarVariables } from 'frog/middlewares';
 import { handle } from 'frog/next';
 import { serveStatic } from 'frog/serve-static';
 import neynarClient, { getEipChainId } from '@/app/utils/neynar/client';
 import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
-import { Address, erc20Abi, parseEther, formatUnits } from 'viem';
+import { Address, erc20Abi, formatUnits } from 'viem';
 import { deleteChannelRule, doesRuleWithContractExist, getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
 import { getContractsDeployed } from '@/app/utils/alchemy/constants';
-import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getErc20Decimals, getErc20Symbol, getFirstTokenIdOfOwner, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getMembersOnlyReferralFee, getTokenExpiration, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
+import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getErc20Decimals, getErc20Symbol, getFirstTokenIdOfOwner, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
 
 const app = new Frog({
@@ -116,6 +116,7 @@ app.hono.post("/hook-setup", async (c) => {
     // 1. Validate the cast author is the owner of the channel
     // 1.1 Get the channel owner
     let channel = await getChannel(cast.root_parent_url!);
+    console.log("hook-setup => channel: ", channel);
     let channelId = channel?.id;
     let channelLead = channel?.lead?.fid;
 
@@ -236,6 +237,8 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
   let lockTokenDecimals = 18; // most ERC20 tokens have 18 decimals
   let lockTokenPriceVisual = '';
   let emptyParam = '_';
+
+  console.log("frame-purchase => status: ", status);
 
   // Get the channel access rules
   let channelRules = await getChannelRules(channelId!);
@@ -397,7 +400,7 @@ app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c) => {
     title: 'Members Only - Membership Purchase',
     image: dynamicImage,
     intents: dynamicIntents,
-    action: dynamicAction
+    // action: dynamicAction
   });
 
 });
