@@ -1,16 +1,16 @@
-import { getFrameMetadata } from 'frog/next'
-import type { Metadata } from 'next'
-import Image from 'next/image'
+import { getFrameMetadata } from 'frog/next';
+import type { Metadata } from 'next';
+import Image from 'next/image';
 
-import styles from './page.module.css'
+import styles from './page.module.css';
 
 export async function generateMetadata(): Promise<Metadata> {
   const frameTags = await getFrameMetadata(
-    `${process.env.VERCEL_URL || 'http://localhost:3000'}/api`,
-  )
+    `${process.env.VERCEL_URL || 'http://localhost:3000'}/api`
+  );
   return {
     other: frameTags,
-  }
+  };
 }
 
 export default function Home() {
@@ -53,17 +53,7 @@ export default function Home() {
       </div>
 
       <div className={styles.center}>
-        <h1 className="text-3xl font-bold underline">
-          @membersonly
-        </h1>
-        {/* <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js Logo"
-          width={180}
-          height={37}
-          priority
-        /> */}
+        <h1 className="text-3xl font-bold underline">@membersonly</h1>
       </div>
 
       <div className={styles.grid}>
@@ -118,5 +108,5 @@ export default function Home() {
         </a>
       </div>
     </main>
-  )
+  );
 }

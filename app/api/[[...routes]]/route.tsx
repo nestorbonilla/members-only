@@ -7,11 +7,35 @@ import { neynar, type NeynarVariables } from 'frog/middlewares';
 import { handle } from 'frog/next';
 import { serveStatic } from 'frog/serve-static';
 import neynarClient, { getEipChainId } from '@/app/utils/neynar/client';
-import { Cast, Channel, ChannelType, ReactionType, ValidateFrameActionResponse } from '@neynar/nodejs-sdk/build/neynar-api/v2';
+import {
+  Cast,
+  Channel,
+  ChannelType,
+  ReactionType,
+  ValidateFrameActionResponse,
+} from '@neynar/nodejs-sdk/build/neynar-api/v2';
 import { Address, erc20Abi, formatUnits } from 'viem';
-import { deleteChannelRule, doesRuleWithContractExist, getChannelRules, insertChannelRule } from '@/app/utils/supabase/server';
+import {
+  deleteChannelRule,
+  doesRuleWithContractExist,
+  getChannelRules,
+  insertChannelRule,
+} from '@/app/utils/supabase/server';
 import { getContractsDeployed } from '@/app/utils/alchemy/constants';
-import { doAddressesHaveValidMembershipInRules, getErc20Allowance, getErc20Decimals, getErc20Symbol, getFirstTokenIdOfOwner, getLockName, getLockPrice, getLockTokenAddress, getLockTotalKeys, getMembersOnlyReferralFee, getTokenExpiration, getTokenOfOwnerByIndex } from '@/app/utils/viem/constants';
+import {
+  doAddressesHaveValidMembershipInRules,
+  getErc20Allowance,
+  getErc20Decimals,
+  getErc20Symbol,
+  getFirstTokenIdOfOwner,
+  getLockName,
+  getLockPrice,
+  getLockTokenAddress,
+  getLockTotalKeys,
+  getMembersOnlyReferralFee,
+  getTokenExpiration,
+  getTokenOfOwnerByIndex,
+} from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
 
 const app = new Frog({
@@ -21,24 +45,24 @@ const app = new Frog({
   ui: { vars },
   origin: process.env.APP_URL,
   imageOptions: {
-    format: "png",
+    format: 'png',
   },
-  verify: process.env.NODE_ENV === 'production' // leave it as is, if not issue with frog local debug tool
+  verify: process.env.NODE_ENV === 'production', // leave it as is, if not issue with frog local debug tool
 });
 
 const neynarMiddleware = neynar({
   apiKey: process.env.NEYNAR_API_KEY!,
-  features: ["interactor", "cast"],
+  features: ['interactor', 'cast'],
 });
 
 // Uncomment to use Edge Runtime
 // export const runtime = 'edge'
 
 enum ApiRoute {
-  HOOK_SETUP = "HOOK-SETUP",
-  HOOK_VALIDATE = "HOOK-VALIDATE",
-  FRAME_PURCHASE = "FRAME-PURCHASE/:CHANNELID",
-  FRAME_SETUP = "FRAME-SETUP/:CHANNELID",
+  HOOK_SETUP = 'HOOK-SETUP',
+  HOOK_VALIDATE = 'HOOK-VALIDATE',
+  FRAME_PURCHASE = 'FRAME-PURCHASE/:CHANNELID',
+  FRAME_SETUP = 'FRAME-SETUP/:CHANNELID',
 }
 
 enum HookSetupResult {
@@ -75,7 +99,7 @@ enum FramePurchaseResult {
   SETUP_TEXT,
   ROUTE_ERROR,
   FRAME_MEMBERSHIP_VALID,
-  FRAME_MEMBERSHIP_INVALID
+  FRAME_MEMBERSHIP_INVALID,
 }
 
 const statusMessage = {
@@ -106,9 +130,9 @@ const statusMessage = {
   },
 };
 
-app.hono.post("/hook-setup", async (c) => {
+app.hono.post('/hook-setup', async (c) => {
   try {
-    console.log("call start: hook-setup");
+    console.log('call start: hook-setup');
 
     const body = await c.req.json();
     let cast: Cast = body.data;
@@ -116,7 +140,7 @@ app.hono.post("/hook-setup", async (c) => {
     // 1. Validate the cast author is the owner of the channel
     // 1.1 Get the channel owner
     let channel = await getChannel(cast.root_parent_url!);
-    console.log("hook-setup => channel: ", channel);
+    console.log('hook-setup => channel: ', channel);
     let channelId = channel?.id;
     let channelLead = channel?.lead?.fid;
 
@@ -124,81 +148,113 @@ app.hono.post("/hook-setup", async (c) => {
     let castAuthor = cast.author.fid;
 
     // 1.3 Compare the channel owner and the cast author and validate the cast text is "@membersonly setup"
-    // Probably second validation will be removed and just validated on the hook
     let castText = cast.text;
 
     if (channelLead == castAuthor) {
       if (castText == process.env.BOT_SETUP_TEXT) {
         const castResponse = await neynarClient.publishCast(
           process.env.SIGNER_UUID!,
-          "",
+          '',
           {
             replyTo: cast.hash,
             embeds: [
               {
                 url: `${process.env.APP_URL}/api/frame-setup/${channelId}`,
-              }
-            ]
+              },
+            ],
           }
         );
         if (castResponse.hash) {
-          return c.json({ message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.CAST_SUCCESS] });
+          return c.json({
+            message:
+              statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.CAST_SUCCESS],
+          });
         } else {
-          return c.json({ message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.CAST_ERROR] });
+          return c.json({
+            message:
+              statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.CAST_ERROR],
+          });
         }
       } else {
-        return c.json({ message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.UNEXPECTED_ERROR] });
+        return c.json({
+          message:
+            statusMessage[ApiRoute.HOOK_SETUP][
+              HookSetupResult.UNEXPECTED_ERROR
+            ],
+        });
       }
     } else {
-      return c.json({ message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.INVALID_AUTHOR] });
+      return c.json({
+        message:
+          statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.INVALID_AUTHOR],
+      });
     }
   } catch (e) {
-    return c.json({ message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.ROUTE_ERROR] });
+    return c.json({
+      message: statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.ROUTE_ERROR],
+    });
   }
 });
 
-app.hono.post("/hook-validate", async (c) => {
+app.hono.post('/hook-validate', async (c) => {
   try {
-    console.log("call start: hook-validate");
+    console.log('call start: hook-validate');
 
     const body = await c.req.json();
     let cast: Cast = body.data;
 
     if (isSetupCast(cast.text)) {
-      return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.SETUP_TEXT] });
+      return c.json({
+        message:
+          statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.SETUP_TEXT],
+      });
     } else {
       let username = body.data.author.username;
       let castHash = body.data.hash;
       let channel = await getChannel(cast.root_parent_url!);
       let channelRules = await getChannelRules(channel?.id!);
       const userAddresses = cast.author.verified_addresses.eth_addresses;
-      console.log("hook-validate => userAddresses: ", userAddresses);
-      let membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(userAddresses, channelRules);
-      console.log("hook-validate => membershipIsValidForAtLeastOneAddress: ", membershipIsValidForAtLeastOneAddress);
+      let membershipIsValidForAtLeastOneAddress =
+        await doAddressesHaveValidMembershipInRules(
+          userAddresses,
+          channelRules
+        );
       if (membershipIsValidForAtLeastOneAddress) {
-        let castReactionResponse = await neynarClient.publishReactionToCast(process.env.SIGNER_UUID!, ReactionType.Like, castHash);
+        let castReactionResponse = await neynarClient.publishReactionToCast(
+          process.env.SIGNER_UUID!,
+          ReactionType.Like,
+          castHash
+        );
         if (castReactionResponse.success) {
-          return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.CAST_REACTION_SUCCESS] });
+          return c.json({
+            message:
+              statusMessage[ApiRoute.HOOK_VALIDATE][
+                HookValidateResult.CAST_REACTION_SUCCESS
+              ],
+          });
         } else {
-          return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.CAST_REACTION_ERROR] });
+          return c.json({
+            message:
+              statusMessage[ApiRoute.HOOK_VALIDATE][
+                HookValidateResult.CAST_REACTION_ERROR
+              ],
+          });
         }
       } else {
         let textCast = '';
-        console.log("hook-validate => membershipIsValidForAtLeastOneAddress: ", membershipIsValidForAtLeastOneAddress);
-        // Determine if the user has no NFT or if the user has an NFT but it's expired
-        let totalKeysCount = await getLockTotalKeys(userAddresses[0], channelRules[0].contract_address, channelRules[0].network);
-        console.log("hook-validate => totalKeysCount: ", totalKeysCount);
+        // Determine if the user has no key or if the user has a key but it's expired
+        let totalKeysCount = await getLockTotalKeys(
+          userAddresses[0],
+          channelRules[0].contract_address,
+          channelRules[0].network
+        );
         if (totalKeysCount == 0) {
           // if no keys then no nft, so suggest cast owner to buy a new key of the lock
           textCast = `Hey @${username}, it looks like you don't have a key to access ${channel?.id} channel yet. Let me help you with that.`;
         } else {
           // One or more keys are expired, so let's renew the first we found
           textCast = `Hey @${username}, it looks like you have an expired key to access ${channel?.id} channel. Let me help you with that.`;
-          let tokenId = await getTokenOfOwnerByIndex(userAddresses[0], 0, channelRules[0].contract_address, channelRules[0].network);
-          console.log("hook-validate => tokenId: ", tokenId);
-          // maybe additional logic here
         }
-        console.log("hook-validate => textCast: ", textCast);
         const castResponse = await neynarClient.publishCast(
           process.env.SIGNER_UUID!,
           textCast,
@@ -206,238 +262,340 @@ app.hono.post("/hook-validate", async (c) => {
             embeds: [
               {
                 url: `${process.env.APP_URL}/api/frame-purchase/${channel?.id}`, // Get at https://app.unlock-protocol.com/locks/checkout-url
-              }]
+              },
+            ],
           }
         );
-        console.log("call end: hook-validate");
+        console.log('call end: hook-validate');
         if (castResponse.hash) {
-          return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.CAST_FRAME_SUCCESS] });
+          return c.json({
+            message:
+              statusMessage[ApiRoute.HOOK_VALIDATE][
+                HookValidateResult.CAST_FRAME_SUCCESS
+              ],
+          });
         } else {
-          return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.CAST_FRAME_ERROR] });
+          return c.json({
+            message:
+              statusMessage[ApiRoute.HOOK_VALIDATE][
+                HookValidateResult.CAST_FRAME_ERROR
+              ],
+          });
         }
       }
     }
   } catch (e) {
-    return c.json({ message: statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.ROUTE_ERROR] });
+    return c.json({
+      message:
+        statusMessage[ApiRoute.HOOK_VALIDATE][HookValidateResult.ROUTE_ERROR],
+    });
   }
 });
 
-app.frame('/frame-purchase/:channelId', neynarMiddleware, async (c: FrameContext) => {
-  console.log("call start: frame-purchase/:channelId");
-  const { buttonValue, buttonIndex, inputText, status, req, res, previousState, previousButtonValues } = c;
-  let ethAddresses: string[] = [];
-  let channelId = req.param('channelId');
-  let textFrame = "";
-  let dynamicImage = '';
-  let dynamicIntents: any[] = [];
-  let totalKeysCount = 0;
-  let erc20Allowance = BigInt(0);
-  let lockTokenSymbol = '';
-  let lockTokenDecimals = 18; // most ERC20 tokens have 18 decimals
-  let lockTokenPriceVisual = '';
-  let emptyParam = '_';
+app.frame(
+  '/frame-purchase/:channelId',
+  neynarMiddleware,
+  async (c: FrameContext) => {
+    console.log('call start: frame-purchase/:channelId');
+    const { buttonValue, status, req } = c;
+    let ethAddresses: string[] = [];
+    let channelId = req.param('channelId');
+    let textFrame = '';
+    let dynamicImage = '';
+    let dynamicIntents: any[] = [];
+    let totalKeysCount = 0;
+    let erc20Allowance = BigInt(0);
+    let lockTokenSymbol = '';
+    let lockTokenDecimals = 18; // most ERC20 tokens have 18 decimals
+    let lockTokenPriceVisual = '';
 
-  // Get the channel access rules
-  let channelRules = await getChannelRules(channelId!);
-  if (status == 'initial' || (status == 'response' && buttonValue == 'done')) {
-    // Step 1: Show the number of rules on the channel
-    dynamicImage = `/api/frame-purchase-initial-image/${channelId}/${channelRules?.length}`;
-    dynamicIntents = [
-      <Button value='verify'>verify</Button>
-    ];
-  } else if (status == 'response') {
-    const payload = await req.json();
-    if (process.env.NODE_ENV === 'production') {
-      const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
-      if (frameActionResponse.valid) {
-        ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
-        console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_ACTION_VALID]);
-      } else {
-        console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_ACTION_INVALID]);
-      }
-    } else {
-      // For local development only
-      ethAddresses = [process.env.APP_TEST_ADDRESS!];
-    }
-    if (ethAddresses.length > 0) {
-      const prevBtn = (index: number) => {
-        if (channelRules.length > 0 && index > 0) {
-          return (<Button value={`page-${index - 1}`}>prev</Button>);
-        }
-      };
-      const nextBtn = (index: number) => {
-        if (channelRules.length > (index + 1)) {
-          return (<Button value={`page-${index + 1}`}>next</Button>);
-        }
-      };
-      if (buttonValue == 'verify' || buttonValue?.startsWith("page-")) {
-        if (channelRules.length > 0) {
-          let currentRule: any;
-          let currentPage = 0;
-          if (buttonValue == 'verify') {
-            currentRule = channelRules[0];
-          } else if (buttonValue?.startsWith("page-")) {
-            let [_, page] = buttonValue!.split("-");
-            currentPage = parseInt(page);
-            currentRule = channelRules[currentPage];
-          }
-          // Verify the user doesn't have a valid membership the first rule
-          let lockName = await getLockName(currentRule.contract_address, currentRule.network);
-          let lockPrice = await getLockPrice(currentRule.contract_address, currentRule.network);
-          let membershipIsValidForAtLeastOneAddress = await doAddressesHaveValidMembershipInRules(ethAddresses, [currentRule]);
-          let keyCounts = await Promise.all(
-            ethAddresses.map((ethAddress) =>
-              getLockTotalKeys(ethAddress, currentRule.contract_address, currentRule.network)
-            )
+    // Get the channel access rules
+    let channelRules = await getChannelRules(channelId!);
+    if (
+      status == 'initial' ||
+      (status == 'response' && buttonValue == 'done')
+    ) {
+      // Step 1: Show the number of rules on the channel
+      dynamicImage = `/api/frame-purchase-initial-image/${channelId}/${channelRules?.length}`;
+      dynamicIntents = [<Button value="verify">verify</Button>];
+    } else if (status == 'response') {
+      const payload = await req.json();
+      if (process.env.NODE_ENV === 'production') {
+        const frameActionResponse: ValidateFrameActionResponse =
+          await neynarClient.validateFrameAction(
+            payload.trustedData.messageBytes
           );
-          let totalKeysCount = keyCounts.reduce((sum, count) => sum + Number(count), 0);
-          let tokenId = await getFirstTokenIdOfOwner(ethAddresses, totalKeysCount, currentRule.contract_address, currentRule.network);
-          let lockTokenAddress = await getLockTokenAddress(currentRule.contract_address, currentRule.network);
-          if (lockTokenAddress == process.env.ZERO_ADDRESS) {
-            // if the token address is zero address, then it's ether
-            lockTokenSymbol = 'ETH';
-            erc20Allowance = lockPrice; // txs with ETH don't need approval
-          } else {
-            lockTokenSymbol = await getErc20Symbol(lockTokenAddress, currentRule.network);
-            lockTokenDecimals = await getErc20Decimals(lockTokenAddress, currentRule.network);
-            lockTokenPriceVisual = formatUnits(lockPrice, lockTokenDecimals);
-            erc20Allowance = await getErc20Allowance(ethAddresses[0], lockTokenAddress, currentRule.contract_address, currentRule.network);
+        if (frameActionResponse.valid) {
+          ethAddresses =
+            frameActionResponse.action.interactor.verified_addresses
+              .eth_addresses;
+          console.log(
+            statusMessage[ApiRoute.FRAME_PURCHASE][
+              FramePurchaseResult.FRAME_ACTION_VALID
+            ]
+          );
+        } else {
+          console.log(
+            statusMessage[ApiRoute.FRAME_PURCHASE][
+              FramePurchaseResult.FRAME_ACTION_INVALID
+            ]
+          );
+        }
+      } else {
+        // For local development only
+        ethAddresses = [process.env.APP_TEST_ADDRESS!];
+      }
+      if (ethAddresses.length > 0) {
+        const prevBtn = (index: number) => {
+          if (channelRules.length > 0 && index > 0) {
+            return <Button value={`page-${index - 1}`}>prev</Button>;
           }
-          // is membership renewable or allowed to buy a new one?
-          // if yes, then show the 'increase allowance' button
-          if (membershipIsValidForAtLeastOneAddress) {
-            console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_MEMBERSHIP_VALID]);
-            // if membership is valid, then if it's renewable, show the expiration date too
-            let keyExpirationInSeconds = await getTokenExpiration(tokenId, currentRule.contract_address, currentRule.network);
-            // let keyExpirationMiliseconds = new Date(Number(keyExpirationInSeconds) * 1000); // Convert to milliseconds
-            // const options: Intl.DateTimeFormatOptions = {
-            //   year: 'numeric',
-            //   month: 'long',
-            //   day: 'numeric',
-            //   hour: 'numeric',
-            //   minute: 'numeric',
-            //   second: 'numeric',
-            //   timeZoneName: 'short', // Optional: Show timezone
-            // };
-            // let keyExpirationString = keyExpirationMiliseconds.toLocaleString(undefined, options);
-            //'/frame-purchase-rule-image/:channelId/:network/:lockName/:isValid/:lockTokenSymbol/:lockTokenPriceVisual'
-            dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/true/${lockTokenSymbol}/${lockTokenPriceVisual}/${keyExpirationInSeconds}`;
-            dynamicIntents = [
-              <Button value='done'>complete</Button>,
-              prevBtn(currentPage),
-              nextBtn(currentPage),
-            ];
-          } else {
-            console.log(statusMessage[ApiRoute.FRAME_PURCHASE][FramePurchaseResult.FRAME_MEMBERSHIP_INVALID]);
-            // '/frame-purchase-rule-image/:channelId/:network/:lockName/:isValid/:lockTokenSymbol/:lockTokenPriceVisual'
-            dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/false/${lockTokenSymbol}/${lockTokenPriceVisual}/0`;
-            const allowBtn = () => {
-              if (erc20Allowance < lockPrice) {
-                return (
-                  <Button value={`approval-${0}`}>increase allowance</Button>
-                );
-              }
-            };
+        };
+        const nextBtn = (index: number) => {
+          if (channelRules.length > index + 1) {
+            return <Button value={`page-${index + 1}`}>next</Button>;
+          }
+        };
+        if (buttonValue == 'verify' || buttonValue?.startsWith('page-')) {
+          if (channelRules.length > 0) {
+            let currentRule: any;
+            let currentPage = 0;
+            if (buttonValue == 'verify') {
+              currentRule = channelRules[0];
+            } else if (buttonValue?.startsWith('page-')) {
+              let [_, page] = buttonValue!.split('-');
+              currentPage = parseInt(page);
+              currentRule = channelRules[currentPage];
+            }
+            // Verify the user doesn't have a valid membership the first rule
+            let lockName = await getLockName(
+              currentRule.contract_address,
+              currentRule.network
+            );
+            let lockPrice = await getLockPrice(
+              currentRule.contract_address,
+              currentRule.network
+            );
+            let membershipIsValidForAtLeastOneAddress =
+              await doAddressesHaveValidMembershipInRules(ethAddresses, [
+                currentRule,
+              ]);
+            let keyCounts = await Promise.all(
+              ethAddresses.map((ethAddress) =>
+                getLockTotalKeys(
+                  ethAddress,
+                  currentRule.contract_address,
+                  currentRule.network
+                )
+              )
+            );
+            let totalKeysCount = keyCounts.reduce(
+              (sum, count) => sum + Number(count),
+              0
+            );
+            let tokenId = await getFirstTokenIdOfOwner(
+              ethAddresses,
+              totalKeysCount,
+              currentRule.contract_address,
+              currentRule.network
+            );
+            let lockTokenAddress = await getLockTokenAddress(
+              currentRule.contract_address,
+              currentRule.network
+            );
+            if (lockTokenAddress == process.env.ZERO_ADDRESS) {
+              // if the token address is zero address, then it's ether
+              lockTokenSymbol = 'ETH';
+              erc20Allowance = lockPrice; // txs with ETH don't need approval
+            } else {
+              lockTokenSymbol = await getErc20Symbol(
+                lockTokenAddress,
+                currentRule.network
+              );
+              lockTokenDecimals = await getErc20Decimals(
+                lockTokenAddress,
+                currentRule.network
+              );
+              lockTokenPriceVisual = formatUnits(lockPrice, lockTokenDecimals);
+              erc20Allowance = await getErc20Allowance(
+                ethAddresses[0],
+                lockTokenAddress,
+                currentRule.contract_address,
+                currentRule.network
+              );
+            }
+            // is membership renewable or allowed to buy a new one?
+            // if yes, then show the 'increase allowance' button
+            if (membershipIsValidForAtLeastOneAddress) {
+              console.log(
+                statusMessage[ApiRoute.FRAME_PURCHASE][
+                  FramePurchaseResult.FRAME_MEMBERSHIP_VALID
+                ]
+              );
+              // if membership is valid, then if it's renewable
+              let keyExpirationInSeconds = await getTokenExpiration(
+                tokenId,
+                currentRule.contract_address,
+                currentRule.network
+              );
+              dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/true/${lockTokenSymbol}/${lockTokenPriceVisual}/${keyExpirationInSeconds}`;
+              dynamicIntents = [
+                <Button value="done">complete</Button>,
+                prevBtn(currentPage),
+                nextBtn(currentPage),
+              ];
+            } else {
+              console.log(
+                statusMessage[ApiRoute.FRAME_PURCHASE][
+                  FramePurchaseResult.FRAME_MEMBERSHIP_INVALID
+                ]
+              );
+              dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/false/${lockTokenSymbol}/${lockTokenPriceVisual}/0`;
+              const allowBtn = () => {
+                if (erc20Allowance < lockPrice) {
+                  return (
+                    <Button value={`approval-${0}`}>increase allowance</Button>
+                  );
+                }
+              };
 
-            const buyBtn = () => {
-              if ((erc20Allowance >= lockPrice) && (!membershipIsValidForAtLeastOneAddress && totalKeysCount == 0)) {
-                return (
-                  // /tx-purchase/:lockAddress/:network/:ethAddress
-                  <Button.Transaction target={`/tx-purchase/${currentRule.network}/${currentRule.contract_address}/${ethAddresses[0]}`}>buy</Button.Transaction>
-                );
-              }
-            };
+              const buyBtn = () => {
+                if (
+                  erc20Allowance >= lockPrice &&
+                  !membershipIsValidForAtLeastOneAddress &&
+                  totalKeysCount == 0
+                ) {
+                  return (
+                    // /tx-purchase/:lockAddress/:network/:ethAddress
+                    <Button.Transaction
+                      target={`/tx-purchase/${currentRule.network}/${currentRule.contract_address}/${ethAddresses[0]}`}
+                    >
+                      buy
+                    </Button.Transaction>
+                  );
+                }
+              };
 
-            const renewBtn = async () => {
-              if ((erc20Allowance >= lockPrice) && (totalKeysCount > 0)) {
-                // Before renewing the key, let's verify if it is renewable
-                let isRenewable = true;
-                if (isRenewable) {
-                  // One or more keys are expired, so let's renew the first we found
-                  if (tokenId > 0) {
-                    return (
-                      // /tx-renew/:network/:lockAddress/:tokenId/:price
-                      <Button.Transaction target={`/tx-renew/${currentRule.network}/${currentRule.contract_address}/${tokenId}/${lockPrice}`}>renew</Button.Transaction>
-                    );
+              const renewBtn = async () => {
+                if (erc20Allowance >= lockPrice && totalKeysCount > 0) {
+                  // Before renewing the key, let's verify if it is renewable
+                  let isRenewable = true;
+                  if (isRenewable) {
+                    // One or more keys are expired, so let's renew the first we found
+                    if (tokenId > 0) {
+                      return (
+                        // /tx-renew/:network/:lockAddress/:tokenId/:price
+                        <Button.Transaction
+                          target={`/tx-renew/${currentRule.network}/${currentRule.contract_address}/${tokenId}/${lockPrice}`}
+                        >
+                          renew
+                        </Button.Transaction>
+                      );
+                    }
                   }
                 }
-              }
-            };
+              };
 
-            dynamicIntents = [
-              prevBtn(currentPage),
-              nextBtn(currentPage),
-              allowBtn(),
-              buyBtn(),
-              await renewBtn(),
-            ];
+              dynamicIntents = [
+                prevBtn(currentPage),
+                nextBtn(currentPage),
+                allowBtn(),
+                buyBtn(),
+                await renewBtn(),
+              ];
+            }
+          } else {
+            dynamicImage = `/api/frame-purchase-no-rules-image/${channelId}`;
+            dynamicIntents = [<Button value="verify">verify</Button>];
           }
-        } else {
-          dynamicImage = `/api/frame-purchase-no-rules-image/${channelId}`;
+        } else if (buttonValue?.startsWith('approval-')) {
+          dynamicImage = `/api/frame-purchase-approval-image/${channelId}`;
+          let [_, page] = buttonValue!.split('-');
+          let currentPage = parseInt(page);
+          let currentRule = channelRules[currentPage];
+          let lockTokenAddress = await getLockTokenAddress(
+            currentRule.contract_address,
+            currentRule.network
+          );
+          let lockPrice = await getLockPrice(
+            currentRule.contract_address,
+            currentRule.network
+          );
           dynamicIntents = [
-            <Button value='verify'>verify</Button>
+            <TextInput placeholder="amount..." />,
+            <Button.Transaction
+              target={`/tx-approval/${currentRule.network}/${currentRule.contract_address}/${lockTokenAddress}/${lockPrice}`}
+            >
+              approve
+            </Button.Transaction>,
           ];
+        } else if (buttonValue == '_t') {
+          dynamicImage = `/api/frame-purchase-tx-submitted-image/${channelId}`;
+          dynamicIntents = [<Button value="done">continue</Button>];
         }
-      } else if (buttonValue?.startsWith("approval-")) {
-        dynamicImage = `/api/frame-purchase-approval-image/${channelId}`;
-        let [_, page] = buttonValue!.split("-");
-        let currentPage = parseInt(page);
-        let currentRule = channelRules[currentPage];
-        let lockTokenAddress = await getLockTokenAddress(currentRule.contract_address, currentRule.network);
-        let lockPrice = await getLockPrice(currentRule.contract_address, currentRule.network);
-        dynamicIntents = [
-          <TextInput placeholder="amount..." />,
-          <Button.Transaction target={`/tx-approval/${currentRule.network}/${currentRule.contract_address}/${lockTokenAddress}/${lockPrice}`}>approve</Button.Transaction>
-        ];
-      } else if (buttonValue == '_t') {
-        dynamicImage = `/api/frame-purchase-tx-submitted-image/${channelId}`;
-        dynamicIntents = [
-          <Button value='done'>continue</Button>
-        ];
+      } else {
+        dynamicImage = `/api/frame-purchase-no-address-image/${channelId}`;
       }
-    } else {
-      dynamicImage = `/api/frame-purchase-no-address-image/${channelId}`;
     }
+    return c.res({
+      title: 'Members Only - Membership Purchase',
+      image: dynamicImage,
+      intents: dynamicIntents,
+    });
   }
-  return c.res({
-    title: 'Members Only - Membership Purchase',
-    image: dynamicImage,
-    intents: dynamicIntents
-  });
-
-});
+);
 
 app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
-  console.log("call start: frame-setup/:channelId");
+  console.log('call start: frame-setup/:channelId');
   const { buttonValue, inputText, status, req } = c;
   let ethAddresses: string[] = [];
   let interactorIsChannelLead = false;
   let channelId = req.param('channelId');
-  let textFrame = "";
+  let textFrame = '';
   let dynamicImage = '';
   let dynamicIntents: any[] = [];
   let conditions = 0;
 
   // Get the channel access rules
-  let channelRules: { id: Number, channel_id: string, network: string, contract_address: string }[] = await getChannelRules(channelId!);
+  let channelRules: {
+    id: Number;
+    channel_id: string;
+    network: string;
+    contract_address: string;
+  }[] = await getChannelRules(channelId!);
   conditions = channelRules?.length ?? 0;
 
-  if (status == "response") {
+  if (status == 'response') {
     // Validate the frame action response and obtain ethAddresses and channelId
     const payload = await req.json();
     if (process.env.NODE_ENV === 'production') {
-      const frameActionResponse: ValidateFrameActionResponse = await neynarClient.validateFrameAction(payload.trustedData.messageBytes);
+      const frameActionResponse: ValidateFrameActionResponse =
+        await neynarClient.validateFrameAction(
+          payload.trustedData.messageBytes
+        );
       if (frameActionResponse.valid) {
-        ethAddresses = frameActionResponse.action.interactor.verified_addresses.eth_addresses;
-        let channel = await getChannel(frameActionResponse.action.cast.root_parent_url!);
+        ethAddresses =
+          frameActionResponse.action.interactor.verified_addresses
+            .eth_addresses;
+        let channel = await getChannel(
+          frameActionResponse.action.cast.root_parent_url!
+        );
         let interactor = frameActionResponse.action.interactor?.fid;
         let channelLead = channel?.lead?.fid;
         if (channelLead == interactor) {
           interactorIsChannelLead = true;
         }
-        console.log(statusMessage[ApiRoute.FRAME_SETUP][FrameSetupResult.FRAME_ACTION_VALID]);
+        console.log(
+          statusMessage[ApiRoute.FRAME_SETUP][
+            FrameSetupResult.FRAME_ACTION_VALID
+          ]
+        );
       } else {
-        console.log(statusMessage[ApiRoute.FRAME_SETUP][FrameSetupResult.FRAME_ACTION_INVALID]);
+        console.log(
+          statusMessage[ApiRoute.FRAME_SETUP][
+            FrameSetupResult.FRAME_ACTION_INVALID
+          ]
+        );
       }
     } else {
       // For local development
@@ -446,27 +604,25 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
     }
   }
 
-  if (status == "initial" || (status == "response" && buttonValue == "done")) {
-
+  if (status == 'initial' || (status == 'response' && buttonValue == 'done')) {
     // Step 1: Show the number of rules on the channel
     let lockName;
     if (channelRules?.length! > 0) {
-      lockName = await getLockName(channelRules![0].contract_address, channelRules![0].network);
+      lockName = await getLockName(
+        channelRules![0].contract_address,
+        channelRules![0].network
+      );
     }
     dynamicImage = `/api/frame-setup-initial-image/${channelId}/${conditions}`;
     if (channelRules?.length! == 0) {
-      dynamicIntents = [
-        <Button value='add'>add</Button>
-      ];
+      dynamicIntents = [<Button value="add">add</Button>];
     } else {
       if (conditions >= Number(process.env.ACCESS_RULES_LIMIT)) {
-        dynamicIntents = [
-          <Button value='remove'>remove</Button>
-        ];
+        dynamicIntents = [<Button value="remove">remove</Button>];
       } else {
         dynamicIntents = [
-          <Button value='add'>add</Button>,
-          <Button value='remove'>remove</Button>
+          <Button value="add">add</Button>,
+          <Button value="remove">remove</Button>,
         ];
       }
     }
@@ -474,43 +630,48 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
     if (interactorIsChannelLead) {
       // Step 2: Show action to achieve, either add or remove a rule
       if (buttonValue == 'add' || buttonValue == 'remove') {
-        console.log("add or remove selection: start");
+        console.log('add or remove selection: start');
         if (buttonValue == 'add') {
           dynamicImage = `/api/frame-setup-network-image/${channelId}`;
           dynamicIntents = [
-            <Button value='base'>base</Button>,
-            <Button value='optimism'>optimism</Button>,
-            <Button value='arbitrum'>arbitrum</Button>
+            <Button value="base">base</Button>,
+            <Button value="optimism">optimism</Button>,
+            <Button value="arbitrum">arbitrum</Button>,
           ];
         } else if (buttonValue == 'remove') {
           const nextBtn = (index: number) => {
             if (channelRules.length > 1 && index) {
-              return (<Button value={`removepage-${index}`}>next</Button>);
+              return <Button value={`removepage-${index}`}>next</Button>;
             }
           };
           if (channelRules?.length! == 0) {
             dynamicImage = `/api/frame-setup-no-rules-image/${channelId}`;
-            dynamicIntents = [
-              <Button value='done'>back</Button>
-            ];
+            dynamicIntents = [<Button value="done">back</Button>];
           } else {
             let currentRule = channelRules[0];
             let firstContractAddress = currentRule.contract_address;
-            let lockName = await getLockName(currentRule.contract_address, currentRule.network);
+            let lockName = await getLockName(
+              currentRule.contract_address,
+              currentRule.network
+            );
             dynamicImage = `/api/frame-setup-remove-rule-image/${channelId}/${currentRule.network}/${lockName}/${currentRule.contract_address}`;
             dynamicIntents = [
               nextBtn(1),
-              <Button value={`removeconfirm-${firstContractAddress}`}>confirm remove</Button >,
+              <Button value={`removeconfirm-${firstContractAddress}`}>
+                confirm remove
+              </Button>,
             ];
           }
         }
-        console.log("add or remove selection: end");
-      } else if (buttonValue == 'base' || buttonValue == 'optimism' || buttonValue == 'arbitrum') {
-        console.log("network selection: start");
+        console.log('add or remove selection: end');
+      } else if (
+        buttonValue == 'base' ||
+        buttonValue == 'optimism' ||
+        buttonValue == 'arbitrum'
+      ) {
+        console.log('network selection: start');
         // Step 3: Show the contract addresses deployed on the selected network
         let network = buttonValue;
-        // let currentRule = channelRules[0];
-        // console.log("currentRule: ", currentRule);
         const contractAddresses: string[] = (
           await Promise.all(
             ethAddresses.map(async (ethAddress) =>
@@ -520,8 +681,13 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         ).flat();
 
         const nextBtn = (index: number) => {
-          if (contractAddresses.length > 1 && index < (contractAddresses.length - 1)) {
-            return (<Button value={`addpage-${network}-${index + 1}`}>next</Button>);
+          if (
+            contractAddresses.length > 1 &&
+            index < contractAddresses.length - 1
+          ) {
+            return (
+              <Button value={`addpage-${network}-${index + 1}`}>next</Button>
+            );
           }
         };
 
@@ -530,35 +696,43 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
 
           // we've got the contract addresses, now we need to get if referral is set
-          let referralFee = await getMembersOnlyReferralFee(contractAddresses[0], network);
+          let referralFee = await getMembersOnlyReferralFee(
+            contractAddresses[0],
+            network
+          );
           if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
             dynamicImage = `/api/frame-setup-referrer-fee-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
             dynamicIntents = [
               <TextInput placeholder="Custom Referrer Fee..." />,
               nextBtn(0),
-              <Button.Transaction target={`/tx-referrer-fee/${network}/${contractAddresses[0]}`}>set referrer fee</Button.Transaction>
+              <Button.Transaction
+                target={`/tx-referrer-fee/${network}/${contractAddresses[0]}`}
+              >
+                set referrer fee
+              </Button.Transaction>,
             ];
           } else {
             dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
             dynamicIntents = [
               <TextInput placeholder="Contract Address..." />,
-              <Button value={'done'}>back</Button >,
+              <Button value={'done'}>back</Button>,
               nextBtn(0),
-              <Button value={`addconfirm-${network}-${(contractAddresses.length > 0) ? contractAddresses[0] : process.env.ZERO_ADDRESS}`}>confirm add</Button >,
+              <Button
+                value={`addconfirm-${network}-${contractAddresses.length > 0 ? contractAddresses[0] : process.env.ZERO_ADDRESS}`}
+              >
+                confirm add
+              </Button>,
             ];
           }
         } else {
           dynamicImage = `/api/frame-setup-no-lock-image/${channelId}`;
         }
 
-
-
-
-        console.log("network selection: end");
-      } else if (buttonValue!.startsWith("addpage-")) {
-        console.log("addpage-: start");
+        console.log('network selection: end');
+      } else if (buttonValue!.startsWith('addpage-')) {
+        console.log('addpage-: start');
         // Step 4: Show the contract address to confirm or write a new one
-        let [_, network, page] = buttonValue!.split("-");
+        let [_, network, page] = buttonValue!.split('-');
         let currentPage = parseInt(page);
         const contractAddresses: string[] = (
           await Promise.all(
@@ -570,25 +744,38 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
 
         const prevBtn = (index: number) => {
           if (contractAddresses.length > 0 && index > 0) {
-            return (<Button value={`addpage-${network}-${index - 1}`}>prev</Button>);
+            return (
+              <Button value={`addpage-${network}-${index - 1}`}>prev</Button>
+            );
           }
         };
         const nextBtn = (index: number) => {
-          if (contractAddresses.length > (index + 1)) {
-            return (<Button value={`addpage-${network}-${index + 1}`}>next</Button>);
+          if (contractAddresses.length > index + 1) {
+            return (
+              <Button value={`addpage-${network}-${index + 1}`}>next</Button>
+            );
           }
         };
 
-        let lockName = await getLockName(contractAddresses[currentPage], network);
-        let referralFee = await getMembersOnlyReferralFee(contractAddresses[currentPage], network);
-        console.log("referralFee: ", referralFee);
+        let lockName = await getLockName(
+          contractAddresses[currentPage],
+          network
+        );
+        let referralFee = await getMembersOnlyReferralFee(
+          contractAddresses[currentPage],
+          network
+        );
         if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
           dynamicImage = `/api/frame-setup-referral-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}`;
           dynamicIntents = [
             <TextInput placeholder="Custom Referrer Fee..." />,
             prevBtn(currentPage),
             nextBtn(currentPage),
-            <Button.Transaction target={`/tx-referral/${network}/${contractAddresses[currentPage]}`}>set referrer fee</Button.Transaction>
+            <Button.Transaction
+              target={`/tx-referral/${network}/${contractAddresses[currentPage]}`}
+            >
+              set referrer fee
+            </Button.Transaction>,
           ];
         } else {
           dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}`;
@@ -596,98 +783,117 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
             <TextInput placeholder="Contract Address..." />,
             prevBtn(currentPage),
             nextBtn(currentPage),
-            <Button value={`addconfirm-${network}-${contractAddresses[currentPage]}`}>confirm add</Button >,
+            <Button
+              value={`addconfirm-${network}-${contractAddresses[currentPage]}`}
+            >
+              confirm add
+            </Button>,
           ];
         }
-
-        console.log("addpage-: end");
-      } else if (buttonValue!.startsWith("addconfirm-")) {
-        console.log("addconfirm-: start");
-        let [_, network, contractAddress] = buttonValue!.split("-");
+      } else if (buttonValue!.startsWith('addconfirm-')) {
+        console.log('addconfirm-: start');
+        let [_, network, contractAddress] = buttonValue!.split('-');
         if (contractAddress == process.env.ZERO_ADDRESS) {
           // if it's zero address, then take the address from the input
           contractAddress = inputText!;
         }
         // Validate there is no rule with the same contract address for this channel
-        let ruleExists = await doesRuleWithContractExist(channelId, contractAddress);
+        let ruleExists = await doesRuleWithContractExist(
+          channelId,
+          contractAddress
+        );
         if (ruleExists) {
           dynamicImage = `/api/frame-setup-repeated-rule-image/${channelId}`;
           dynamicIntents = [
             <TextInput placeholder="Contract Address..." />,
-            <Button value={'done'}>back</Button >,
-            <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>confirm add</Button >,
+            <Button value={'done'}>back</Button>,
+            <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
+              confirm add
+            </Button>,
           ];
         } else {
-          let insertError = await insertChannelRule(channelId, network, contractAddress, "AND", "ALLOW");
+          let insertError = await insertChannelRule(
+            channelId,
+            network,
+            contractAddress,
+            'AND',
+            'ALLOW'
+          );
           if (insertError) {
             dynamicImage = `/api/frame-setup-add-error-rule-image/${channelId}`;
             dynamicIntents = [
               <TextInput placeholder="Contract Address..." />,
-              <Button value={'done'}>back</Button >,
-              <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>try again</Button >,
+              <Button value={'done'}>back</Button>,
+              <Button
+                value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}
+              >
+                try again
+              </Button>,
             ];
           } else {
             dynamicImage = `/api/frame-setup-add-complete-rule-image/${channelId}`;
-            dynamicIntents = [
-              <Button value={'done'}>complete</Button>,
-            ];
+            dynamicIntents = [<Button value={'done'}>complete</Button>];
           }
         }
-        console.log("addconfirm-: end");
-      } else if (buttonValue!.startsWith("removepage-")) {
-        console.log("removepage-: start");
+        console.log('addconfirm-: end');
+      } else if (buttonValue!.startsWith('removepage-')) {
+        console.log('removepage-: start');
         // Step 4: Show the contract address to confirm or write a new one
-        let [_, page] = buttonValue!.split("-");
+        let [_, page] = buttonValue!.split('-');
         let currentPage = parseInt(page);
         let currentRule = channelRules![currentPage];
-        let lockName = await getLockName(currentRule.contract_address, currentRule.network);
+        let lockName = await getLockName(
+          currentRule.contract_address,
+          currentRule.network
+        );
         dynamicImage = `/api/frame-setup-remove-rule-image/${channelId}/${currentRule.network}/${lockName}/${currentRule.contract_address}`;
         const prevBtn = (index: number) => {
           if (channelRules.length > 0 && index > 0) {
-            return (<Button value={`removepage-${index - 1}`}>prev</Button>);
+            return <Button value={`removepage-${index - 1}`}>prev</Button>;
           }
         };
         const nextBtn = (index: number) => {
-          if (channelRules.length > (index + 1)) {
-            return (<Button value={`removepage-${index + 1}`}>next</Button>);
+          if (channelRules.length > index + 1) {
+            return <Button value={`removepage-${index + 1}`}>next</Button>;
           }
         };
         dynamicIntents = [
           prevBtn(currentPage),
           nextBtn(currentPage),
-          <Button value={`removeconfirm-${currentRule.contract_address}`}>confirm remove</Button >,
+          <Button value={`removeconfirm-${currentRule.contract_address}`}>
+            confirm remove
+          </Button>,
         ];
-        console.log("removepage-: end");
-      } else if (buttonValue!.startsWith("removeconfirm-")) {
-        console.log("removeconfirm-: start");
-        let [_, contractAddress] = buttonValue!.split("-");
+        console.log('removepage-: end');
+      } else if (buttonValue!.startsWith('removeconfirm-')) {
+        console.log('removeconfirm-: start');
+        let [_, contractAddress] = buttonValue!.split('-');
         let deleteError = await deleteChannelRule(channelId, contractAddress);
         if (deleteError) {
           dynamicImage = `/api/frame-setup-remove-error-rule-image/${channelId}`;
           dynamicIntents = [
-            <Button value={'done'}>Restart</Button >,
-            <Button value={`removeconfirm-${contractAddress}`}>try again</Button >,
+            <Button value={'done'}>Restart</Button>,
+            <Button value={`removeconfirm-${contractAddress}`}>
+              try again
+            </Button>,
           ];
         } else {
           dynamicImage = `/api/frame-setup-remove-complete-rule-image/${channelId}`;
-          dynamicIntents = [
-            <Button value={'done'}>complete</Button>,
-          ];
+          dynamicIntents = [<Button value={'done'}>complete</Button>];
         }
-        console.log("removeconfirm-: end");
+        console.log('removeconfirm-: end');
       } else if (buttonValue == '_t') {
         dynamicImage = `/api/frame-purchase-tx-submitted-image/${channelId}`;
-        dynamicIntents = [
-          <Button value='done'>continue</Button>
-        ];
+        dynamicIntents = [<Button value="done">continue</Button>];
       }
     } else {
-      textFrame = "This is a @membersonly frame to configure rules, know more about me at my profile.";
+      textFrame =
+        'This is a @membersonly frame to configure rules, know more about me at my profile.';
       dynamicImage = `/api/frame-setup-no-access-image/${channelId}`;
       dynamicIntents = [];
     }
   }
-  console.log("call end: frame-setup-channel/:channelId");
+  console.log('call end: frame-setup-channel/:channelId');
   return c.res({
     title: 'Members Only - Channel Setup',
     image: dynamicImage,
@@ -696,7 +902,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
 });
 
 app.transaction('/tx-referrer-fee/:network/:lockAddress', (c) => {
-  console.log("call start: tx-referrer-fee/:network/:lockAddress");
+  console.log('call start: tx-referrer-fee/:network/:lockAddress');
   const { inputText, req } = c;
   let lockAddress = req.param('lockAddress');
   let network = req.param('network');
@@ -707,86 +913,79 @@ app.transaction('/tx-referrer-fee/:network/:lockAddress', (c) => {
   } else {
     feeBasisPoint = BigInt(process.env.MO_MINIMUM_REFERRAL_FEE!);
   }
-  console.log("tx-referrer-fee => MO_ADDRESS: ", process.env.MO_ADDRESS);
-  console.log("tx-referrer-fee => feeBasisPoint: ", feeBasisPoint);
+  console.log('tx-referrer-fee => MO_ADDRESS: ', process.env.MO_ADDRESS);
+  console.log('tx-referrer-fee => feeBasisPoint: ', feeBasisPoint);
   return c.contract({
     abi: contracts.PublicLockV14.abi,
     chainId: getEipChainId(network),
     functionName: 'setReferrerFee',
     args: [process.env.MO_ADDRESS, feeBasisPoint],
-    to: lockAddress as `0x${string}`
+    to: lockAddress as `0x${string}`,
   });
 });
 
-app.transaction('/tx-approval/:network/:lockAddress/:lockTokenAddress/:lockPrice', async (c) => {
-  const { inputText, req } = c;
-  let network = req.param('network');
-  let lockAddress = req.param('lockAddress');
-  let lockTokenAddress = req.param('lockTokenAddress');
-  let lockPrice = req.param('lockPrice');
-  let paramLockTokenAddress = lockTokenAddress as `0x${string}`;
-  let paramLockAddress = lockAddress as `0x${string}`;
-  type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
-  let paramChainId: EipChainId = getEipChainId(network);
-  console.log("tx-approval => inputText: ", inputText);
-  let customTimes = parseInt(inputText!);
-  console.log("tx-approval => customTimes: ", customTimes);
-  let price = customTimes > 1 ? BigInt(customTimes) * BigInt(lockPrice) : BigInt(lockPrice);
+app.transaction(
+  '/tx-approval/:network/:lockAddress/:lockTokenAddress/:lockPrice',
+  async (c) => {
+    const { inputText, req } = c;
+    let network = req.param('network');
+    let lockAddress = req.param('lockAddress');
+    let lockTokenAddress = req.param('lockTokenAddress');
+    let lockPrice = req.param('lockPrice');
+    let paramLockTokenAddress = lockTokenAddress as `0x${string}`;
+    let paramLockAddress = lockAddress as `0x${string}`;
+    type EipChainId = 'eip155:8453' | 'eip155:10' | 'eip155:42161';
+    let paramChainId: EipChainId = getEipChainId(network);
+    let customTimes = parseInt(inputText!);
+    let price =
+      customTimes > 1
+        ? BigInt(customTimes) * BigInt(lockPrice)
+        : BigInt(lockPrice);
 
-  // Logs
-  console.log("tx-approval => lockTokenAddress: ", paramLockTokenAddress);
-  console.log("tx-approval => lockPrice: ", price);
-  console.log("tx-approval => lockAddress: ", paramLockAddress);
-  console.log("tx-approval => network: ", network);
-  console.log("tx-approval => chainId: ", paramChainId);
+    return c.contract({
+      abi: erc20Abi,
+      chainId: paramChainId,
+      functionName: 'approve',
+      args: [
+        paramLockAddress, // spender address
+        price, // amount uint256
+      ],
+      to: paramLockTokenAddress,
+    });
+  }
+);
 
-  return c.contract({
-    abi: erc20Abi,
-    chainId: paramChainId,
-    functionName: 'approve',
-    args: [
-      paramLockAddress, // spender address
-      price, // amount uint256
-    ],
-    to: paramLockTokenAddress
-  });
-});
+app.transaction(
+  '/tx-purchase/:network/:lockAddress/:userAddress',
+  async (c) => {
+    const { req } = c;
+    let network = req.param('network');
+    let lockAddress = req.param('lockAddress');
+    let userAddress = req.param('userAddress');
+    let lockPrice = await getLockPrice(lockAddress, network);
 
-app.transaction('/tx-purchase/:network/:lockAddress/:userAddress', async (c) => {
-  const { req } = c;
-  let network = req.param('network');
-  let lockAddress = req.param('lockAddress');
-  let userAddress = req.param('userAddress');
-  let lockPrice = await getLockPrice(lockAddress, network);
+    let paramLockAddress = lockAddress as `0x${string}`;
+    let paramUserAddress = userAddress as `0x${string}`;
+    let paramMOAddress = process.env.MO_ADDRESS as `0x${string}`;
+    let paramLockPrice = BigInt(lockPrice);
+    type EipChainId = 'eip155:8453' | 'eip155:10' | 'eip155:42161';
+    let paramChainId: EipChainId = getEipChainId(network);
 
-  let paramLockAddress = lockAddress as `0x${string}`;
-  let paramUserAddress = userAddress as `0x${string}`;
-  let paramMOAddress = process.env.MO_ADDRESS as `0x${string}`;
-  let paramLockPrice = BigInt(lockPrice);
-  type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
-  let paramChainId: EipChainId = getEipChainId(network);
-
-  // Logs
-  console.log("tx-purchase => lockAddress: ", paramLockAddress);
-  console.log("tx-purchase => network: ", network);
-  console.log("tx-purchase => paramUserAddress: ", paramUserAddress);
-  console.log("tx-purchase => lockPrice: ", paramLockPrice);
-  console.log("tx-purchase => chainId: ", paramChainId);
-
-  return c.contract({
-    abi: contracts.PublicLockV14.abi,
-    chainId: paramChainId,
-    functionName: 'purchase',
-    args: [
-      [paramLockPrice], // _values uint256[]
-      [paramUserAddress], // _recipients address[]
-      [paramMOAddress], // _referrers address[]
-      [paramUserAddress], // _keyManagers address[]
-      [''], // _data bytes[]
-    ],
-    to: paramLockAddress
-  });
-});
+    return c.contract({
+      abi: contracts.PublicLockV14.abi,
+      chainId: paramChainId,
+      functionName: 'purchase',
+      args: [
+        [paramLockPrice], // _values uint256[]
+        [paramUserAddress], // _recipients address[]
+        [paramMOAddress], // _referrers address[]
+        [paramUserAddress], // _keyManagers address[]
+        [''], // _data bytes[]
+      ],
+      to: paramLockAddress,
+    });
+  }
+);
 
 app.transaction('/tx-renew/:network/:lockAddress/:tokenId/:price', (c) => {
   const { req } = c;
@@ -797,18 +996,10 @@ app.transaction('/tx-renew/:network/:lockAddress/:tokenId/:price', (c) => {
 
   let paramLockAddress = lockAddress as `0x${string}`;
   let paramMOAddress = process.env.MO_ADDRESS as `0x${string}`;
-  type EipChainId = "eip155:8453" | "eip155:10" | "eip155:42161";
+  type EipChainId = 'eip155:8453' | 'eip155:10' | 'eip155:42161';
   let paramChainId: EipChainId = getEipChainId(network);
   let paramLockAbi = contracts.PublicLockV14.abi;
   let paramPrice = BigInt(price);
-
-  // Logs
-  console.log("tx-renew => lockAddress: ", paramLockAddress);
-  console.log("tx-renew => network: ", network);
-  console.log("tx-renew => tokenId: ", tokenId);
-  console.log("tx-renew => paramPrice: ", paramPrice);
-  console.log("tx-renew => MO_ADDRESS: ", paramMOAddress);
-  console.log("tx-renew => chainId: ", paramChainId);
 
   return c.contract({
     abi: paramLockAbi,
@@ -816,72 +1007,20 @@ app.transaction('/tx-renew/:network/:lockAddress/:tokenId/:price', (c) => {
     functionName: 'extend',
     args: [
       paramPrice, // _values uint256
-      tokenId,  // _tokenId uint256
+      tokenId, // _tokenId uint256
       paramMOAddress, // _referrer address
       '', // _data bytes
     ],
-    to: paramLockAddress
+    to: paramLockAddress,
   });
 });
 
-app.image('/frame-purchase-initial-image/:channelId/:rulesCount', neynarMiddleware, (c) => {
-  const { channelId, rulesCount } = c.req.param();
-  let textFrame = `This channel has ${rulesCount} ${(parseInt(rulesCount) != 1) ? "rules" : "rule"}. To purchase or renew your key(s), lets start by veryfing some data.`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
-      },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly user</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
-
-app.image('/frame-purchase-rule-image/:channelId/:network/:lockName/:isValid/:lockTokenSymbol/:lockTokenPriceVisual/:keyExpirationInSeconds', neynarMiddleware, (c) => {
-  const { channelId, network, lockName, isValid, lockTokenSymbol, lockTokenPriceVisual, keyExpirationInSeconds } = c.req.param();
-  let textDescription = '';
-  let textPrice = '';
-  const booleanMap = new Map([
-    ["true", true],
-    ["false", false],
-  ]);
-
-  if (booleanMap.get(isValid)) {
-    let keyExpirationMiliseconds = new Date(Number(keyExpirationInSeconds) * 1000); // Convert to milliseconds
-    const options: Intl.DateTimeFormatOptions = {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: 'numeric',
-      minute: 'numeric',
-      second: 'numeric',
-      timeZoneName: 'short', // Optional: Show timezone
-    };
-    let keyExpirationString = keyExpirationMiliseconds.toLocaleString(undefined, options);
-    textDescription = ` You own a valid membership for the lock "${lockName}", deployed on ${network} network, and is valid til ${keyExpirationString}`;
+app.image(
+  '/frame-purchase-initial-image/:channelId/:rulesCount',
+  neynarMiddleware,
+  (c) => {
+    const { channelId, rulesCount } = c.req.param();
+    let textFrame = `This channel has ${rulesCount} ${parseInt(rulesCount) != 1 ? 'rules' : 'rule'}. To purchase or renew your key(s), lets start by veryfing some data.`;
     return c.res({
       imageOptions: {
         headers: {
@@ -897,7 +1036,7 @@ app.image('/frame-purchase-rule-image/:channelId/:network/:lockName/:isValid/:lo
           borderStyle="solid"
           borderRadius="8"
           borderWidth="4"
-          borderColor='yellow'
+          borderColor="yellow"
         >
           <VStack gap="4">
             <Heading color={'black'}>@membersonly user</Heading>
@@ -907,236 +1046,329 @@ app.image('/frame-purchase-rule-image/:channelId/:network/:lockName/:isValid/:lo
             </Text>
             <Spacer size="10" />
             <Text color={'black'} size="18">
-              {textDescription}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  } else {
-    textDescription = ` You dont own a valid membership for the lock "${lockName}", deployed on ${network} network.`;
-    textPrice = `It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor='yellow'
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly user</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textDescription}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textPrice}
+              {textFrame}
             </Text>
           </VStack>
         </Box>
       ),
     });
   }
-});
+);
 
-app.image('/frame-purchase-tx-submitted-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textDescription = `Your tx has been submitted to the blockchain, please wait a few seconds, and then click on complete.`;
+app.image(
+  '/frame-purchase-rule-image/:channelId/:network/:lockName/:isValid/:lockTokenSymbol/:lockTokenPriceVisual/:keyExpirationInSeconds',
+  neynarMiddleware,
+  (c) => {
+    const {
+      channelId,
+      network,
+      lockName,
+      isValid,
+      lockTokenSymbol,
+      lockTokenPriceVisual,
+      keyExpirationInSeconds,
+    } = c.req.param();
+    let textDescription = '';
+    let textPrice = '';
+    const booleanMap = new Map([
+      ['true', true],
+      ['false', false],
+    ]);
 
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+    if (booleanMap.get(isValid)) {
+      let keyExpirationMiliseconds = new Date(
+        Number(keyExpirationInSeconds) * 1000
+      ); // Convert to milliseconds
+      const options: Intl.DateTimeFormatOptions = {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: 'numeric',
+        second: 'numeric',
+        timeZoneName: 'short', // Optional: Show timezone
+      };
+      let keyExpirationString = keyExpirationMiliseconds.toLocaleString(
+        undefined,
+        options
+      );
+      textDescription = ` You own a valid membership for the lock "${lockName}", deployed on ${network} network, and is valid til ${keyExpirationString}`;
+      return c.res({
+        imageOptions: {
+          headers: {
+            'Cache-Control': 'max-age=0',
+          },
+        },
+        image: (
+          <Box
+            grow
+            alignHorizontal="center"
+            backgroundColor="background"
+            padding="32"
+            borderStyle="solid"
+            borderRadius="8"
+            borderWidth="4"
+            borderColor="yellow"
+          >
+            <VStack gap="4">
+              <Heading color={'black'}>@membersonly user</Heading>
+              <Spacer size="20" />
+              <Text color={'black'} size="20">
+                Channel: {channelId}
+              </Text>
+              <Spacer size="10" />
+              <Text color={'black'} size="18">
+                {textDescription}
+              </Text>
+            </VStack>
+          </Box>
+        ),
+      });
+    } else {
+      textDescription = ` You dont own a valid membership for the lock "${lockName}", deployed on ${network} network.`;
+      textPrice = `It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
+      return c.res({
+        imageOptions: {
+          headers: {
+            'Cache-Control': 'max-age=0',
+          },
+        },
+        image: (
+          <Box
+            grow
+            alignHorizontal="center"
+            backgroundColor="background"
+            padding="32"
+            borderStyle="solid"
+            borderRadius="8"
+            borderWidth="4"
+            borderColor="yellow"
+          >
+            <VStack gap="4">
+              <Heading color={'black'}>@membersonly user</Heading>
+              <Spacer size="20" />
+              <Text color={'black'} size="20">
+                Channel: {channelId}
+              </Text>
+              <Spacer size="10" />
+              <Text color={'black'} size="18">
+                {textDescription}
+              </Text>
+              <Spacer size="10" />
+              <Text color={'black'} size="18">
+                {textPrice}
+              </Text>
+            </VStack>
+          </Box>
+        ),
+      });
+    }
+  }
+);
+
+app.image(
+  '/frame-purchase-tx-submitted-image/:channelId',
+  neynarMiddleware,
+  (c) => {
+    const { channelId } = c.req.param();
+    let textDescription = `Your tx has been submitted to the blockchain, please wait a few seconds, and then click on complete.`;
+
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly user</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textDescription}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly user</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textDescription}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
-app.image('/frame-purchase-approval-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textDescription = `Do you want to approve one time (default), or multiple times? (set a number higher than 1)`;
+app.image(
+  '/frame-purchase-approval-image/:channelId',
+  neynarMiddleware,
+  (c) => {
+    const { channelId } = c.req.param();
+    let textDescription = `Do you want to approve one time (default), or multiple times? (set a number higher than 1)`;
 
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly user</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textDescription}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly user</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textDescription}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
-app.image('/frame-purchase-no-address-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textDescription = `It seems you dont have any eth address verified. Please verify at least one address to proceed.`;
+app.image(
+  '/frame-purchase-no-address-image/:channelId',
+  neynarMiddleware,
+  (c) => {
+    const { channelId } = c.req.param();
+    let textDescription = `It seems you dont have any eth address verified. Please verify at least one address to proceed.`;
 
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly user</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textDescription}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly user</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textDescription}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
-app.image('/frame-purchase-no-rules-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textDescription = `It seems there are no rules currently to purchase for this channel. Please contact the channel lead to add rules.`;
+app.image(
+  '/frame-purchase-no-rules-image/:channelId',
+  neynarMiddleware,
+  (c) => {
+    const { channelId } = c.req.param();
+    let textDescription = `It seems there are no rules currently to purchase for this channel. Please contact the channel lead to add rules.`;
 
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly user</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textDescription}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly user</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textDescription}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
-app.image('/frame-setup-initial-image/:channelId/:rulesCount', neynarMiddleware, (c) => {
-  const { channelId, rulesCount } = c.req.param();
-  let textFrame = `This channel has ${rulesCount} ${(parseInt(rulesCount) != 1) ? "rules" : "rule"}. As channel lead, you can add or remove rules.`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+app.image(
+  '/frame-setup-initial-image/:channelId/:rulesCount',
+  neynarMiddleware,
+  (c) => {
+    const { channelId, rulesCount } = c.req.param();
+    let textFrame = `This channel has ${rulesCount} ${parseInt(rulesCount) != 1 ? 'rules' : 'rule'}. As channel lead, you can add or remove rules.`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly moderator</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
 app.image('/frame-setup-network-image/:channelId', neynarMiddleware, (c) => {
   const { channelId } = c.req.param();
@@ -1156,7 +1388,7 @@ app.image('/frame-setup-network-image/:channelId', neynarMiddleware, (c) => {
         borderStyle="solid"
         borderRadius="8"
         borderWidth="4"
-        borderColor='yellow'
+        borderColor="yellow"
       >
         <VStack gap="4">
           <Heading color={'black'}>@membersonly moderator</Heading>
@@ -1192,7 +1424,7 @@ app.image('/frame-setup-no-rules-image/:channelId', neynarMiddleware, (c) => {
         borderStyle="solid"
         borderRadius="8"
         borderWidth="4"
-        borderColor='yellow'
+        borderColor="yellow"
       >
         <VStack gap="4">
           <Heading color={'black'}>@membersonly moderator</Heading>
@@ -1210,45 +1442,50 @@ app.image('/frame-setup-no-rules-image/:channelId', neynarMiddleware, (c) => {
   });
 });
 
-app.image('/frame-setup-repeated-rule-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textFrame = `A rule with this membership already exists. Please select another membership.`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+app.image(
+  '/frame-setup-repeated-rule-image/:channelId',
+  neynarMiddleware,
+  (c) => {
+    const { channelId } = c.req.param();
+    let textFrame = `A rule with this membership already exists. Please select another membership.`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly moderator</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
 app.image('/frame-setup-no-lock-image/:channelId', neynarMiddleware, (c) => {
   const { channelId } = c.req.param();
-  let textFrame = "There are no locks deployed from your accounts, please set one on the input and click confirm. (It must be an Unlock contract)";
+  let textFrame =
+    'There are no locks deployed from your accounts, please set one on the input and click confirm. (It must be an Unlock contract)';
   return c.res({
     imageOptions: {
       headers: {
@@ -1264,7 +1501,7 @@ app.image('/frame-setup-no-lock-image/:channelId', neynarMiddleware, (c) => {
         borderStyle="solid"
         borderRadius="8"
         borderWidth="4"
-        borderColor='yellow'
+        borderColor="yellow"
       >
         <VStack gap="4">
           <Heading color={'black'}>@membersonly moderator</Heading>
@@ -1284,7 +1521,8 @@ app.image('/frame-setup-no-lock-image/:channelId', neynarMiddleware, (c) => {
 
 app.image('/frame-setup-no-access-image/:channelId', neynarMiddleware, (c) => {
   const { channelId } = c.req.param();
-  let textFrame = "To access this frame, you need to be the owner of the this channel.";
+  let textFrame =
+    'To access this frame, you need to be the owner of the this channel.';
   return c.res({
     imageOptions: {
       headers: {
@@ -1300,7 +1538,7 @@ app.image('/frame-setup-no-access-image/:channelId', neynarMiddleware, (c) => {
         borderStyle="solid"
         borderRadius="8"
         borderWidth="4"
-        borderColor='yellow'
+        borderColor="yellow"
       >
         <VStack gap="4">
           <Heading color={'black'}>@membersonly moderator</Heading>
@@ -1318,261 +1556,285 @@ app.image('/frame-setup-no-access-image/:channelId', neynarMiddleware, (c) => {
   });
 });
 
-app.image('/frame-setup-referrer-fee-image/:channelId/:network/:lockName/:lockAddress', neynarMiddleware, (c) => {
-  const { channelId, network, lockName, lockAddress } = c.req.param();
-  let textFrame = `To add a rule with the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network, please add a min. of 5% of referral fee to @membersonly for future purchases or renewals.`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+app.image(
+  '/frame-setup-referrer-fee-image/:channelId/:network/:lockName/:lockAddress',
+  neynarMiddleware,
+  (c) => {
+    const { channelId, network, lockName, lockAddress } = c.req.param();
+    let textFrame = `To add a rule with the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network, please add a min. of 5% of referral fee to @membersonly for future purchases or renewals.`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly moderator</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
-app.image('/frame-setup-add-rule-image/:channelId/:network/:lockName/:lockAddress', neynarMiddleware, (c) => {
-  const { channelId, network, lockName, lockAddress } = c.req.param();
-  let textFrame = `Do you want to add the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network as a requirement to cast on this channel?`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+app.image(
+  '/frame-setup-add-rule-image/:channelId/:network/:lockName/:lockAddress',
+  neynarMiddleware,
+  (c) => {
+    const { channelId, network, lockName, lockAddress } = c.req.param();
+    let textFrame = `Do you want to add the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network as a requirement to cast on this channel?`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly moderator</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
-app.image('/frame-setup-add-complete-rule-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textFrame = `The rule was added successfully.`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+app.image(
+  '/frame-setup-add-complete-rule-image/:channelId',
+  neynarMiddleware,
+  (c) => {
+    const { channelId } = c.req.param();
+    let textFrame = `The rule was added successfully.`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly moderator</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
-app.image('/frame-setup-add-error-rule-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textFrame = `There was an error trying to add the rule. Please, try again.`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+app.image(
+  '/frame-setup-add-error-rule-image/:channelId',
+  neynarMiddleware,
+  (c) => {
+    const { channelId } = c.req.param();
+    let textFrame = `There was an error trying to add the rule. Please, try again.`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly moderator</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
-app.image('/frame-setup-remove-rule-image/:channelId/:network/:lockName/:lockAddress', neynarMiddleware, (c) => {
-  const { channelId, network, lockName, lockAddress } = c.req.param();
-  let textFrame = `Do you want to remove the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network as a requirement to cast on this channel?`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+app.image(
+  '/frame-setup-remove-rule-image/:channelId/:network/:lockName/:lockAddress',
+  neynarMiddleware,
+  (c) => {
+    const { channelId, network, lockName, lockAddress } = c.req.param();
+    let textFrame = `Do you want to remove the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network as a requirement to cast on this channel?`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly moderator</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
-app.image('/frame-setup-remove-complete-rule-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textFrame = `The rule was removed successfully.`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+app.image(
+  '/frame-setup-remove-complete-rule-image/:channelId',
+  neynarMiddleware,
+  (c) => {
+    const { channelId } = c.req.param();
+    let textFrame = `The rule was removed successfully.`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly moderator</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
-app.image('/frame-setup-remove-error-rule-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textFrame = `There was an error trying to remove the rule. Please, try again.`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
+app.image(
+  '/frame-setup-remove-error-rule-image/:channelId',
+  neynarMiddleware,
+  (c) => {
+    const { channelId } = c.req.param();
+    let textFrame = `There was an error trying to remove the rule. Please, try again.`;
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
       },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor='yellow'
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
-
-
-
-
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly moderator</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
 
 //_______________________________________________________________________________________________________________________
 // Utils
@@ -1598,25 +1860,32 @@ const getFrameImage = (text: string) => {
       </VStack>
     </Box>
   );
-}
+};
 
 const getDistinctAddresses = async (fid: string): Promise<Address[]> => {
   let fetchedUsers: any = await neynarClient.fetchBulkUsers([Number(fid)]);
-  const ethAddresses: string[] = fetchedUsers.users[0]?.verified_addresses?.eth_addresses;
-  return Array.from(new Set(
-    (ethAddresses || [])
-      .filter(address => typeof address === 'string' && address.startsWith('0x'))
-      .map(address => address as Address)
-  ));
+  const ethAddresses: string[] =
+    fetchedUsers.users[0]?.verified_addresses?.eth_addresses;
+  return Array.from(
+    new Set(
+      (ethAddresses || [])
+        .filter(
+          (address) => typeof address === 'string' && address.startsWith('0x')
+        )
+        .map((address) => address as Address)
+    )
+  );
 };
 
 const shortenAddress = (address: string): string => {
-  return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : "";
+  return address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '';
 };
 
 function isSetupCast(castText: string): boolean {
   // Conditional text has been set in the hook, but it's also validated here
-  return castText.trim().toLowerCase() === process.env.BOT_SETUP_TEXT!.toLowerCase(); // Case-insensitive check
+  return (
+    castText.trim().toLowerCase() === process.env.BOT_SETUP_TEXT!.toLowerCase()
+  ); // Case-insensitive check
 }
 
 function getLastPartOfUrl(url: string) {
@@ -1628,15 +1897,19 @@ function getLastPartOfUrl(url: string) {
 const getChannel = async (rootParentUrl: string): Promise<Channel | null> => {
   // let channelId = getLastPartOfUrl(rootParentUrl);
   // let channels: Array<Channel> = (await neynarClient.searchChannels(channelId)).channels;
-  let channels: Array<Channel> = (await neynarClient.fetchBulkChannels([rootParentUrl], { type: ChannelType.ParentUrl })).channels;
+  let channels: Array<Channel> = (
+    await neynarClient.fetchBulkChannels([rootParentUrl], {
+      type: ChannelType.ParentUrl,
+    })
+  ).channels;
   if (channels && channels.length > 0) {
     return channels[0];
   } else {
     return null;
   }
-}
+};
 
-devtools(app, { serveStatic })
+devtools(app, { serveStatic });
 
-export const GET = handle(app)
-export const POST = handle(app)
+export const GET = handle(app);
+export const POST = handle(app);

@@ -12,31 +12,37 @@ const getClient = (network: string) => {
 
 const getViemNetwork = (network: string) => {
   switch (network) {
-    case "base":
+    case 'base':
       return base;
-    case "optimism":
+    case 'optimism':
       return optimism;
-    case "arbitrum":
+    case 'arbitrum':
       return arbitrum;
     default:
       throw new Error(`Unsupported network: ${network}`);
   }
-}
+};
 
-export const getMembersOnlyReferralFee = async (contractAddress: string, network: string): Promise<any> => {
+export const getMembersOnlyReferralFee = async (
+  contractAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   let referralFee = await client.readContract({
     address: contractAddress as `0x${string}`,
     abi: contracts.PublicLockV14.abi,
-    functionName: "referrerFees",
+    functionName: 'referrerFees',
     args: [process.env.MO_ADDRESS],
   });
   return referralFee;
 };
 
-export const getLockName = async (lockAddress: string, network: string): Promise<any> => {
+export const getLockName = async (
+  lockAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
-  let lockName = "";
+  let lockName = '';
   try {
     let readContractResult = await client.readContract({
       address: lockAddress as `0x${string}`,
@@ -50,7 +56,11 @@ export const getLockName = async (lockAddress: string, network: string): Promise
   return lockName;
 };
 
-export const getLockIsValid = async (userAddress: string, lockAddress: string, network: string): Promise<any> => {
+export const getLockIsValid = async (
+  userAddress: string,
+  lockAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   const isValid = await client.readContract({
     address: lockAddress as `0x${string}`,
@@ -58,11 +68,17 @@ export const getLockIsValid = async (userAddress: string, lockAddress: string, n
     functionName: 'getHasValidKey',
     args: [userAddress],
   });
-  console.log(`Does ${userAddress} have a valid membership in ${lockAddress} deployed on ${network}? ${isValid}`);
+  console.log(
+    `Does ${userAddress} have a valid membership in ${lockAddress} deployed on ${network}? ${isValid}`
+  );
   return isValid;
 };
 
-export const getLockTotalKeys = async (userAddress: string, lockAddress: string, network: string): Promise<any> => {
+export const getLockTotalKeys = async (
+  userAddress: string,
+  lockAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   const count = await client.readContract({
     address: lockAddress as `0x${string}`,
@@ -70,11 +86,16 @@ export const getLockTotalKeys = async (userAddress: string, lockAddress: string,
     functionName: 'totalKeys',
     args: [userAddress],
   });
-  console.log(`How many keys does ${userAddress} have in lock ${lockAddress} deployed on ${network}? It has ${count}`);
+  console.log(
+    `How many keys does ${userAddress} have in lock ${lockAddress} deployed on ${network}? It has ${count}`
+  );
   return count;
 };
 
-export const getLockTokenAddress = async (lockAddress: string, network: string): Promise<any> => {
+export const getLockTokenAddress = async (
+  lockAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   const tokenAddress = await client.readContract({
     address: lockAddress as `0x${string}`,
@@ -82,11 +103,16 @@ export const getLockTokenAddress = async (lockAddress: string, network: string):
     functionName: 'tokenAddress',
     args: [],
   });
-  console.log(`What's the address of the erc20 price of the lock ${lockAddress} deployed on ${network}? It is ${tokenAddress}`);
+  console.log(
+    `What's the address of the erc20 price of the lock ${lockAddress} deployed on ${network}? It is ${tokenAddress}`
+  );
   return tokenAddress;
 };
 
-export const getLockPrice = async (lockAddress: string, network: string): Promise<any> => {
+export const getLockPrice = async (
+  lockAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   const price = await client.readContract({
     address: lockAddress as `0x${string}`,
@@ -94,11 +120,16 @@ export const getLockPrice = async (lockAddress: string, network: string): Promis
     functionName: 'keyPrice',
     args: [],
   });
-  console.log(`What's the price of a lock ${lockAddress} deployed on ${network}? It is ${price}`);
+  console.log(
+    `What's the price of a lock ${lockAddress} deployed on ${network}? It is ${price}`
+  );
   return price;
 };
 
-export const getTotalSupply = async (lockAddress: string, network: string): Promise<any> => {
+export const getTotalSupply = async (
+  lockAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   const totalSupply = await client.readContract({
     address: lockAddress as `0x${string}`,
@@ -106,14 +137,26 @@ export const getTotalSupply = async (lockAddress: string, network: string): Prom
     functionName: 'totalSupply',
     args: [],
   });
-  console.log(`What's the total supply of the lock ${lockAddress} deployed on ${network}? It is ${totalSupply}`);
+  console.log(
+    `What's the total supply of the lock ${lockAddress} deployed on ${network}? It is ${totalSupply}`
+  );
   return totalSupply;
-}
+};
 
-export const getFirstTokenIdOfOwner = async (userAddresses: string[], totalKeysCount: number, contractAddress: string, network: string) => {
+export const getFirstTokenIdOfOwner = async (
+  userAddresses: string[],
+  totalKeysCount: number,
+  contractAddress: string,
+  network: string
+) => {
   for (const userAddress of userAddresses) {
     for (let index = 0; index < totalKeysCount; index++) {
-      const idToken = await getTokenOfOwnerByIndex(userAddress, index, contractAddress, network);
+      const idToken = await getTokenOfOwnerByIndex(
+        userAddress,
+        index,
+        contractAddress,
+        network
+      );
       if (idToken > 0) {
         return idToken; // Found an owned key, return the idToken
       }
@@ -122,7 +165,12 @@ export const getFirstTokenIdOfOwner = async (userAddresses: string[], totalKeysC
   return 0; // No owned keys found
 };
 
-export const getTokenOfOwnerByIndex = async (userAddress: string, index: number, lockAddress: string, network: string): Promise<any> => {
+export const getTokenOfOwnerByIndex = async (
+  userAddress: string,
+  index: number,
+  lockAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   const count = await client.readContract({
     address: lockAddress as `0x${string}`,
@@ -133,7 +181,11 @@ export const getTokenOfOwnerByIndex = async (userAddress: string, index: number,
   return count;
 };
 
-export const getTokenExpiration = async (tokenId: number, lockAddress: string, network: string): Promise<any> => {
+export const getTokenExpiration = async (
+  tokenId: number,
+  lockAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   const expiration = await client.readContract({
     address: lockAddress as `0x${string}`,
@@ -141,26 +193,32 @@ export const getTokenExpiration = async (tokenId: number, lockAddress: string, n
     functionName: 'keyExpirationTimestampFor',
     args: [tokenId],
   });
-  console.log(`What's the expiration date of the token ${tokenId} in lock ${lockAddress} deployed on ${network}? It is ${expiration}`);
+  console.log(
+    `What's the expiration date of the token ${tokenId} in lock ${lockAddress} deployed on ${network}? It is ${expiration}`
+  );
   return expiration;
 };
 
 export const doAddressesHaveValidMembershipInRules = async (
   userAddresses: string[],
   channelRules: {
-    id: number,
-    channel_id: string,
-    operator: string,
-    rule_behavior: string,
-    network: string,
-    contract_address: string,
-    created_at: string,
-    updated_at: string | null
+    id: number;
+    channel_id: string;
+    operator: string;
+    rule_behavior: string;
+    network: string;
+    contract_address: string;
+    created_at: string;
+    updated_at: string | null;
   }[]
 ): Promise<boolean> => {
   for (const userAddress of userAddresses) {
     for (const rule of channelRules) {
-      const isValid = await getLockIsValid(userAddress, rule.contract_address, rule.network);
+      const isValid = await getLockIsValid(
+        userAddress,
+        rule.contract_address,
+        rule.network
+      );
       if (isValid) {
         return true; // Found a valid membership, so return early
       }
@@ -169,7 +227,12 @@ export const doAddressesHaveValidMembershipInRules = async (
   return false; // No valid membership found after checking all combinations
 };
 
-export const getErc20Allowance = async (userAddress: string, tokenAddress: string, lockAddress: string, network: string): Promise<any> => {
+export const getErc20Allowance = async (
+  userAddress: string,
+  tokenAddress: string,
+  lockAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   const allowance = await client.readContract({
     address: tokenAddress as `0x${string}`,
@@ -178,9 +241,12 @@ export const getErc20Allowance = async (userAddress: string, tokenAddress: strin
     args: [userAddress as `0x${string}`, lockAddress as `0x${string}`],
   });
   return allowance;
-}
+};
 
-export const getErc20Symbol = async (tokenAddress: string, network: string): Promise<any> => {
+export const getErc20Symbol = async (
+  tokenAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   const symbol = await client.readContract({
     address: tokenAddress as `0x${string}`,
@@ -189,9 +255,12 @@ export const getErc20Symbol = async (tokenAddress: string, network: string): Pro
     args: [],
   });
   return symbol;
-}
+};
 
-export const getErc20Decimals = async (tokenAddress: string, network: string): Promise<any> => {
+export const getErc20Decimals = async (
+  tokenAddress: string,
+  network: string
+): Promise<any> => {
   let client = getClient(network);
   const allowance = await client.readContract({
     address: tokenAddress as `0x${string}`,
@@ -200,4 +269,4 @@ export const getErc20Decimals = async (tokenAddress: string, network: string): P
     args: [],
   });
   return allowance;
-}
+};

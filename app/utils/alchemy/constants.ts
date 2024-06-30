@@ -1,4 +1,4 @@
-import { getUnlockProxyAddress } from "../unlock/membership";
+import { getUnlockProxyAddress } from '../unlock/membership';
 
 export const getAlchemyRpc = (network: string): string => {
   switch (network) {
@@ -11,29 +11,32 @@ export const getAlchemyRpc = (network: string): string => {
     default:
       throw new Error(`Unsupported network: ${network}`);
   }
-}
+};
 
-export const getContractsDeployed = async (userAddress: string, network: string): Promise<string[]> => {
+export const getContractsDeployed = async (
+  userAddress: string,
+  network: string
+): Promise<string[]> => {
   let alchemyRpc = getAlchemyRpc(network);
   try {
     const txWithProxy = await fetch(alchemyRpc, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        jsonrpc: "2.0",
-        method: "alchemy_getAssetTransfers",
+        jsonrpc: '2.0',
+        method: 'alchemy_getAssetTransfers',
         params: [
           {
-            fromBlock: "0x0",
-            toBlock: "latest",
+            fromBlock: '0x0',
+            toBlock: 'latest',
             fromAddress: userAddress,
             toAddress: getUnlockProxyAddress(network),
-            category: ["external"],
-            order: "desc",
+            category: ['external'],
+            order: 'desc',
             withMetadata: true,
-            excludeZeroValue: false // it needs to include zero values
+            excludeZeroValue: false, // it needs to include zero values
           },
         ],
       }),
@@ -61,13 +64,13 @@ export const getContractsDeployed = async (userAddress: string, network: string)
     const allReceiptPromises = await Promise.all(
       txHashes.map(async (txHash: string) => {
         const response = await fetch(alchemyRpc, {
-          method: "POST",
+          method: 'POST',
           headers: {
-            "Content-Type": "application/json",
+            'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            jsonrpc: "2.0",
-            method: "eth_getTransactionReceipt",
+            jsonrpc: '2.0',
+            method: 'eth_getTransactionReceipt',
             params: [txHash],
           }),
           next: {
@@ -94,7 +97,7 @@ export const getContractsDeployed = async (userAddress: string, network: string)
     });
     return contractAddresses;
   } catch (error) {
-    console.error("Error in getContractsDeployed requests:", error);
+    console.error('Error in getContractsDeployed requests:', error);
     return [];
   }
-}
+};

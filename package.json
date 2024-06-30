@@ -1,7 +1,8 @@
 {
-  "name": "members-only",
+  "name": "membersonly",
   "version": "0.0.1",
   "license": "MIT",
+  "author": "Nestor Bonilla",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,7 +10,9 @@
     "deploy": "vercel",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@neynar/nodejs-sdk": "^1.33.0",
@@ -31,6 +34,7 @@
     "@types/react-dom": "^18",
     "autoprefixer": "^10.4.19",
     "postcss": "^8.4.38",
+    "prettier": "^3.3.2",
     "tailwindcss": "^3.4.4",
     "typescript": "^5",
     "vercel": "^32.4.1"
