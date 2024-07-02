@@ -6,7 +6,7 @@ const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'MembersOnly',
-  description: 'Farcaster bot for Unlock Protocol membership gating',
+  description: 'Farcaster channel bot for Unlock Protocol membership gating',
 };
 
 export default function RootLayout({

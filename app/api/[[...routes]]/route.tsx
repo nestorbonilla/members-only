@@ -34,7 +34,6 @@ import {
   getLockTotalKeys,
   getMembersOnlyReferralFee,
   getTokenExpiration,
-  getTokenOfOwnerByIndex,
 } from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
 
@@ -165,6 +164,32 @@ app.hono.post('/hook-setup', async (c) => {
           }
         );
         if (castResponse.hash) {
+          
+          // Now let's update the validate hook
+          const webhooks = await neynarClient.fetchWebhooks().then((res) => res.webhooks);
+          const targetWebhook = webhooks.find(webhook => webhook.title === process.env.MO_HOOK_VALIDATE_TITLE);
+          if (!targetWebhook || !targetWebhook.subscription || !targetWebhook.subscription.filters['cast.created']) {
+              throw new Error(`Webhook with title "${process.env.MO_HOOK_VALIDATE_TITLE}" or its filters not found.`);
+          } else {
+            let rootParentUrls = targetWebhook.subscription.filters['cast.created'].root_parent_urls!;
+            const textFound = rootParentUrls.map(url => url.includes(channel?.parent_url!)).includes(true);
+            if (!textFound) {
+              const updateWebhook = await neynarClient.updateWebhook(
+                process.env.MO_HOOK_VALIDATE_ID!,
+                process.env.MO_HOOK_VALIDATE_TITLE!,
+                process.env.MO_HOOK_VALIDATE_TARGET_URL!,
+                {
+                  subscription: {
+                    'cast.created': {
+                      root_parent_urls: [...rootParentUrls, channel?.parent_url!]
+                    }                    
+                  }
+                }
+              );
+              updateWebhook.success ? console.log('Validate webhook updated successfully') : console.log('Failed to update validate webhook');
+            }
+          }
+  
           return c.json({
             message:
               statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.CAST_SUCCESS],
