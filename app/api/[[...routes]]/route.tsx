@@ -655,7 +655,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
     if (interactorIsChannelLead) {
       // Step 2: Show action to achieve, either add or remove a rule
       if (buttonValue == 'add' || buttonValue == 'remove') {
-        console.log('add or remove selection: start');
         if (buttonValue == 'add') {
           dynamicImage = `/api/frame-setup-network-image/${channelId}`;
           dynamicIntents = [
@@ -725,6 +724,18 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
             contractAddresses[0],
             network
           );
+          
+          // here i need to add an extra step, if not I'm asking for the referral fee automatically
+          // dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
+          // dynamicIntents = [
+          //   nextBtn(0),
+          //   <Button
+          //       value={`addconfirm-${network}-${contractAddresses.length > 0 ? contractAddresses[0] : process.env.ZERO_ADDRESS}`}
+          //     >
+          //       confirm
+          //     </Button>
+          // ];
+          
           if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
             dynamicImage = `/api/frame-setup-referrer-fee-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
             dynamicIntents = [
@@ -791,7 +802,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           network
         );
         if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
-          dynamicImage = `/api/frame-setup-referral-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}`;
+          dynamicImage = `/api/frame-setup-referrer-fee-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}`;
           dynamicIntents = [
             <TextInput placeholder="Custom Referrer Fee..." />,
             prevBtn(currentPage),
@@ -1045,7 +1056,12 @@ app.image(
   neynarMiddleware,
   (c) => {
     const { channelId, rulesCount } = c.req.param();
-    let textFrame = `This channel has ${rulesCount} ${parseInt(rulesCount) != 1 ? 'rules' : 'rule'}. To purchase or renew your key(s), lets start by veryfing some data.`;
+    let textFrame = '';
+    if (parseInt(rulesCount) == 0) {
+      textFrame = `This channel is currently open to everyone, as a channel lead, you can make it members only!`;
+    } else {
+     `This channel currently requires ${rulesCount} ${parseInt(rulesCount) != 1 ? 'memberships' : 'membership'}. To purchase or renew one, lets start by veryfing some data.`; 
+    }
     return c.res({
       imageOptions: {
         headers: {
@@ -1397,7 +1413,7 @@ app.image(
 
 app.image('/frame-setup-network-image/:channelId', neynarMiddleware, (c) => {
   const { channelId } = c.req.param();
-  let textFrame = `To add a rule on this channel, start by selecting the network the membership is deployed on.`;
+  let textFrame = `Start by selecting the network on which the membership contract has ben deployed.`;
   return c.res({
     imageOptions: {
       headers: {
