@@ -135,17 +135,12 @@ app.hono.post('/hook-setup', async (c: Context) => {
     console.log('call start: hook-setup');
     const { status, req } = c;
     
-    console.log('hook-setup => status: ', status);
-    
     const body = await req.json();
     let cast: Cast = body.data;
-    console.log('hook-setup => cast: ', cast);
-    console.log('hook-setup => root_parent_url: ', cast.root_parent_url);
-
+    
     // 1. Validate the cast author is the owner of the channel
     // 1.1 Get the channel owner
     let channel = await getChannel(cast.root_parent_url!);
-    console.log('hook-setup => channel: ', channel);
     let channelId = channel?.id;
     let channelLead = channel?.lead?.fid;
 
@@ -155,12 +150,8 @@ app.hono.post('/hook-setup', async (c: Context) => {
     // 1.3 Compare the channel owner and the cast author and validate the cast text is "@membersonly setup"
     let castText = cast.text;
     
-    console.log('hook-setup => channelLead: ', channelLead);
-    console.log('hook-setup => castAuthor: ', castAuthor);
-
     if (channelLead == castAuthor) {
       if (castText == process.env.BOT_SETUP_TEXT) {
-        console.log('hook-setup => before publish cast: ');
         const castResponse = await neynarClient.publishCast(
           process.env.SIGNER_UUID!,
           '',
@@ -173,38 +164,28 @@ app.hono.post('/hook-setup', async (c: Context) => {
             ],
           }
         );
-        console.log('hook-setup => castResponse: ', castResponse);
         if (castResponse.hash) {
           // Now let's update the validate hook
           const webhooks = await neynarClient.fetchWebhooks().then((res) => res.webhooks);
-            console.log('hook-setup => webhooks: ', webhooks);
           const targetWebhook = webhooks.find(
             (webhook) => webhook.title === process.env.MO_HOOK_VALIDATE_TITLE
           );
-          console.log('hook-setup => targetWebhook: ', targetWebhook);
           if (
             !targetWebhook ||
             !targetWebhook.subscription ||
             !targetWebhook.subscription.filters['cast.created']
           ) {
-            console.log('hook-setup => no hook found');
             throw new Error(
               `Webhook with title "${process.env.MO_HOOK_VALIDATE_TITLE}" or its filters not found.`
             );
           } else {
             const castCreatedFilter = targetWebhook.subscription.filters['cast.created'];
-            console.log('hook-setup => castCreatedFilter: ', castCreatedFilter);
             let rootParentUrls = castCreatedFilter.root_parent_urls || [];
-            console.log('hook-setup => rootParentUrls: ', rootParentUrls);
             // Ensure channel is defined
             if (channel && channel.url && channel.parent_url) {
               const textFound = rootParentUrls.some((url: string) => url.includes(channel.url));
-              console.log('hook-setup => textFound: ', textFound);
-
               if (!textFound) {
-                  console.log('hook-setup => before updateWebhook: ');
                   const updatedRootParentUrls = [...new Set([...rootParentUrls, channel.parent_url])]; // Remove duplicates
-                  console.log('hook-setup => updatedRootParentUrls: ', updatedRootParentUrls);
                   const updateWebhook = await neynarClient.updateWebhook(
                       process.env.MO_HOOK_VALIDATE_ID!,
                       process.env.MO_HOOK_VALIDATE_TITLE!,
@@ -217,8 +198,6 @@ app.hono.post('/hook-setup', async (c: Context) => {
                           },
                       }
                   );
-
-                  console.log('hook-setup => updateWebhook: ', updateWebhook);
                   updateWebhook.success
                       ? console.log('Validate webhook updated successfully')
                       : console.log('Failed to update validate webhook');
@@ -742,19 +721,26 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
             )
           )
         ).flat();
-
-        const nextBtn = (index: number) => {
-          if (
-            contractAddresses.length > 1 &&
-            index < contractAddresses.length - 1
-          ) {
-            return (
-              <Button value={`addpage-${network}-${index + 1}`}>next</Button>
-            );
-          }
-        };
-
-        if (contractAddresses.length > 0) {
+        
+        if (!contractAddresses || contractAddresses.length === 0) {
+          dynamicImage = `/api/frame-setup-no-lock-image/${channelId}`;
+          dynamicIntents = [
+            <TextInput placeholder="contract address..." />,
+            <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
+              custom
+            </Button>,
+          ];
+        } else {
+          const nextBtn = (index: number) => {
+            if (
+              contractAddresses.length > 1 &&
+              index < contractAddresses.length - 1
+            ) {
+              return (
+                <Button value={`addpage-${network}-${index + 1}`}>next</Button>
+              );
+            }
+          };
           let lockName = await getLockName(contractAddresses[0], network);
           let currentLock = 1;
           let totalLocks = contractAddresses.length;
@@ -770,16 +756,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
               custom
             </Button>,
           ];
-        } else {
-          dynamicImage = `/api/frame-setup-no-lock-image/${channelId}`;
-          dynamicIntents = [
-            <TextInput placeholder="contract address..." />,
-            <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
-              custom
-            </Button>,
-          ];
         }
-
         console.log('network selection: end');
       } else if (buttonValue!.startsWith('addpage-')) {
         console.log('addpage-: start');
