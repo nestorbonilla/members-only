@@ -134,7 +134,10 @@ app.hono.post('/hook-setup', async (c) => {
     console.log('call start: hook-setup');
 
     const body = await c.req.json();
+    console.log('hook-setup => body: ', body);
     let cast: Cast = body.data;
+    console.log('hook-setup => cast: ', cast);
+    console.log('hook-setup => root_parent_url: ', cast.root_parent_url);
 
     // 1. Validate the cast author is the owner of the channel
     // 1.1 Get the channel owner
