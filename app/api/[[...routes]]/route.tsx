@@ -1,14 +1,7 @@
 /** @jsxImportSource frog/jsx */
 
 import { Button, FrameContext, Frog, TextInput } from 'frog';
-import {
-  Box,
-  Heading,
-  Text,
-  VStack,
-  Spacer,
-  vars
-} from '@/app/utils/frog/ui';
+import { Box, Heading, Text, VStack, Spacer, vars } from '@/app/utils/frog/ui';
 import { devtools } from 'frog/dev';
 import { neynar, type NeynarVariables } from 'frog/middlewares';
 import { handle } from 'frog/next';
@@ -501,7 +494,7 @@ app.frame(
                 ]
               );
               dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/false/${lockTokenSymbol}/${lockTokenPriceVisual}/0`;
-                            
+
               const allowBtn = () => {
                 if (erc20Allowance < lockPrice) {
                   return (
@@ -954,8 +947,6 @@ app.transaction('/tx-referrer-fee/:network/:lockAddress', (c) => {
   } else {
     feeBasisPoint = BigInt(process.env.MO_MINIMUM_REFERRAL_FEE!);
   }
-  console.log('tx-referrer-fee => MO_ADDRESS: ', process.env.MO_ADDRESS);
-  console.log('tx-referrer-fee => feeBasisPoint: ', feeBasisPoint);
   return c.contract({
     abi: contracts.PublicLockV14.abi,
     chainId: getEipChainId(network),
