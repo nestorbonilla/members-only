@@ -466,7 +466,6 @@ app.frame(
                 lockTokenAddress,
                 currentRule.network
               );
-              lockTokenPriceVisual = formatUnits(lockPrice, lockTokenDecimals);
               erc20Allowance = await getErc20Allowance(
                 ethAddresses[0],
                 lockTokenAddress,
@@ -474,6 +473,7 @@ app.frame(
                 currentRule.network
               );
             }
+            lockTokenPriceVisual = formatUnits(lockPrice, lockTokenDecimals);
             // is membership renewable or allowed to buy a new one?
             // if yes, then show the 'increase allowance' button
             if (membershipIsValidForAtLeastOneAddress) {
@@ -501,16 +501,7 @@ app.frame(
                 ]
               );
               dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/false/${lockTokenSymbol}/${lockTokenPriceVisual}/0`;
-              console.log('/frame-purchase/:channelId => channelId: ', channelId);
-              console.log('/frame-purchase/:channelId => network: ', currentRule.network);
-              console.log('/frame-purchase/:channelId => lockName: ', lockName);
-              console.log('/frame-purchase/:channelId => isValid: ', false);
-              console.log('/frame-purchase/:channelId => lockTokenSymbol: ', lockTokenSymbol);
-              console.log('/frame-purchase/:channelId => lockTokenPriceVisual: ', lockTokenPriceVisual);
-              console.log('/frame-purchase/:channelId => keyExpirationInSeconds: ', 0);
-              console.log('dynamicImage: ', dynamicImage);
-              //'/frame-purchase-rule-image/:channelId/:network/:lockName/:isValid/:lockTokenSymbol/:lockTokenPriceVisual/:keyExpirationInSeconds',
-              
+                            
               const allowBtn = () => {
                 if (erc20Allowance < lockPrice) {
                   return (
@@ -1180,11 +1171,6 @@ app.image(
         ),
       });
     } else {
-      console.log('is not valid');
-      console.log('lockName', lockName);
-      console.log('network', network);
-      console.log('lockTokenPriceVisual', lockTokenPriceVisual);
-      console.log('lockTokenSymbol', lockTokenSymbol);
       textDescription = ` You dont own a valid membership for the lock "${lockName}", deployed on ${network} network.`;
       textPrice = `It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
       return c.res({
