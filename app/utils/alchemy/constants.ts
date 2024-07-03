@@ -3,11 +3,11 @@ import { getUnlockProxyAddress } from '../unlock/membership';
 export const getAlchemyRpc = (network: string): string => {
   switch (network) {
     case 'base':
-      return `${process.env.ALCHEMY_RPC_URL_BASE}${process.env.ALCHEMY_API_KEY_BASE}`;
+      return `${process.env.ALCHEMY_RPC_URL_BASE}${process.env.ALCHEMY_API_KEY}`;
     case 'optimism':
-      return `${process.env.ALCHEMY_RPC_URL_OPTIMISM}${process.env.ALCHEMY_API_KEY_OPTIMISM}`;
+      return `${process.env.ALCHEMY_RPC_URL_OPTIMISM}${process.env.ALCHEMY_API_KEY}`;
     case 'arbitrum':
-      return `${process.env.ALCHEMY_RPC_URL_ARBITRUM}${process.env.ALCHEMY_API_KEY_ARBITRUM}`;
+      return `${process.env.ALCHEMY_RPC_URL_ARBITRUM}${process.env.ALCHEMY_API_KEY}`;
     default:
       throw new Error(`Unsupported network: ${network}`);
   }
