@@ -1,7 +1,14 @@
 /** @jsxImportSource frog/jsx */
 
 import { Button, FrameContext, Frog, TextInput } from 'frog';
-import { Box, Heading, Text, VStack, Spacer, vars, Image } from '@/app/utils/frog/ui';
+import {
+  Box,
+  Heading,
+  Text,
+  VStack,
+  Spacer,
+  vars
+} from '@/app/utils/frog/ui';
 import { devtools } from 'frog/dev';
 import { neynar, type NeynarVariables } from 'frog/middlewares';
 import { handle } from 'frog/next';
@@ -164,15 +171,28 @@ app.hono.post('/hook-setup', async (c) => {
           }
         );
         if (castResponse.hash) {
-          
           // Now let's update the validate hook
-          const webhooks = await neynarClient.fetchWebhooks().then((res) => res.webhooks);
-          const targetWebhook = webhooks.find(webhook => webhook.title === process.env.MO_HOOK_VALIDATE_TITLE);
-          if (!targetWebhook || !targetWebhook.subscription || !targetWebhook.subscription.filters['cast.created']) {
-              throw new Error(`Webhook with title "${process.env.MO_HOOK_VALIDATE_TITLE}" or its filters not found.`);
+          const webhooks = await neynarClient
+            .fetchWebhooks()
+            .then((res) => res.webhooks);
+          const targetWebhook = webhooks.find(
+            (webhook) => webhook.title === process.env.MO_HOOK_VALIDATE_TITLE
+          );
+          if (
+            !targetWebhook ||
+            !targetWebhook.subscription ||
+            !targetWebhook.subscription.filters['cast.created']
+          ) {
+            throw new Error(
+              `Webhook with title "${process.env.MO_HOOK_VALIDATE_TITLE}" or its filters not found.`
+            );
           } else {
-            let rootParentUrls = targetWebhook.subscription.filters['cast.created'].root_parent_urls!;
-            const textFound = rootParentUrls.map(url => url.includes(channel?.parent_url!)).includes(true);
+            let rootParentUrls =
+              targetWebhook.subscription.filters['cast.created']
+                .root_parent_urls!;
+            const textFound = rootParentUrls
+              .map((url) => url.includes(channel?.parent_url!))
+              .includes(true);
             if (!textFound) {
               const updateWebhook = await neynarClient.updateWebhook(
                 process.env.MO_HOOK_VALIDATE_ID!,
@@ -181,15 +201,20 @@ app.hono.post('/hook-setup', async (c) => {
                 {
                   subscription: {
                     'cast.created': {
-                      root_parent_urls: [...rootParentUrls, channel?.parent_url!]
-                    }                    
-                  }
+                      root_parent_urls: [
+                        ...rootParentUrls,
+                        channel?.parent_url!,
+                      ],
+                    },
+                  },
                 }
               );
-              updateWebhook.success ? console.log('Validate webhook updated successfully') : console.log('Failed to update validate webhook');
+              updateWebhook.success
+                ? console.log('Validate webhook updated successfully')
+                : console.log('Failed to update validate webhook');
             }
           }
-  
+
           return c.json({
             message:
               statusMessage[ApiRoute.HOOK_SETUP][HookSetupResult.CAST_SUCCESS],
@@ -717,51 +742,28 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
 
         if (contractAddresses.length > 0) {
           let lockName = await getLockName(contractAddresses[0], network);
-          dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
-
-          // we've got the contract addresses, now we need to get if referral is set
-          let referralFee = await getMembersOnlyReferralFee(
-            contractAddresses[0],
-            network
-          );
-          
+          let currentLock = 1;
+          let totalLocks = contractAddresses.length;
           // here i need to add an extra step, if not I'm asking for the referral fee automatically
-          // dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
-          // dynamicIntents = [
-          //   nextBtn(0),
-          //   <Button
-          //       value={`addconfirm-${network}-${contractAddresses.length > 0 ? contractAddresses[0] : process.env.ZERO_ADDRESS}`}
-          //     >
-          //       confirm
-          //     </Button>
-          // ];
-          
-          if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
-            dynamicImage = `/api/frame-setup-referrer-fee-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
-            dynamicIntents = [
-              <TextInput placeholder="Custom Referrer Fee..." />,
-              nextBtn(0),
-              <Button.Transaction
-                target={`/tx-referrer-fee/${network}/${contractAddresses[0]}`}
-              >
-                set referrer fee
-              </Button.Transaction>,
-            ];
-          } else {
-            dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}`;
-            dynamicIntents = [
-              <TextInput placeholder="Contract Address..." />,
-              <Button value={'done'}>back</Button>,
-              nextBtn(0),
-              <Button
-                value={`addconfirm-${network}-${contractAddresses.length > 0 ? contractAddresses[0] : process.env.ZERO_ADDRESS}`}
-              >
-                confirm add
-              </Button>,
-            ];
-          }
+          dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}/${currentLock}/${totalLocks}`;
+          dynamicIntents = [
+            <TextInput placeholder="contract address..." />,
+            nextBtn(0),
+            <Button value={`addconfirm-${network}-${contractAddresses[0]}`}>
+              confirm
+            </Button>,
+            <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
+              custom
+            </Button>,
+          ];
         } else {
           dynamicImage = `/api/frame-setup-no-lock-image/${channelId}`;
+          dynamicIntents = [
+            <TextInput placeholder="contract address..." />,
+            <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
+              custom
+            </Button>,
+          ];
         }
 
         console.log('network selection: end');
@@ -797,35 +799,23 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           contractAddresses[currentPage],
           network
         );
-        let referralFee = await getMembersOnlyReferralFee(
-          contractAddresses[currentPage],
-          network
-        );
-        if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
-          dynamicImage = `/api/frame-setup-referrer-fee-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}`;
-          dynamicIntents = [
-            <TextInput placeholder="Custom Referrer Fee..." />,
-            prevBtn(currentPage),
-            nextBtn(currentPage),
-            <Button.Transaction
-              target={`/tx-referral/${network}/${contractAddresses[currentPage]}`}
-            >
-              set referrer fee
-            </Button.Transaction>,
-          ];
-        } else {
-          dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}`;
-          dynamicIntents = [
-            <TextInput placeholder="Contract Address..." />,
-            prevBtn(currentPage),
-            nextBtn(currentPage),
-            <Button
-              value={`addconfirm-${network}-${contractAddresses[currentPage]}`}
-            >
-              confirm add
-            </Button>,
-          ];
-        }
+        let currentLock = currentPage + 1;
+        let totalLocks = contractAddresses.length;
+        // here i need to add an extra step, if not I'm asking for the referral fee automatically
+        dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}/${currentLock}/${totalLocks}`;
+        dynamicIntents = [
+          <TextInput placeholder="contract address..." />,
+          prevBtn(currentPage),
+          nextBtn(currentPage),
+          <Button
+            value={`addconfirm-${network}-${contractAddresses[currentPage]}`}
+          >
+            confirm
+          </Button>,
+          <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
+            custom
+          </Button>,
+        ];
       } else if (buttonValue!.startsWith('addconfirm-')) {
         console.log('addconfirm-: start');
         let [_, network, contractAddress] = buttonValue!.split('-');
@@ -833,42 +823,56 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           // if it's zero address, then take the address from the input
           contractAddress = inputText!;
         }
-        // Validate there is no rule with the same contract address for this channel
-        let ruleExists = await doesRuleWithContractExist(
-          channelId,
-          contractAddress
+
+        // validate referrer fee
+        let referralFee = await getMembersOnlyReferralFee(
+          contractAddress,
+          network
         );
-        if (ruleExists) {
-          dynamicImage = `/api/frame-setup-repeated-rule-image/${channelId}`;
+        if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
+          let lockName = await getLockName(contractAddress, network);
+          dynamicImage = `/api/frame-setup-referrer-fee-image/${channelId}/${network}/${lockName}/${contractAddress}`;
           dynamicIntents = [
-            <TextInput placeholder="Contract Address..." />,
+            <TextInput placeholder="custom referrer fee..." />,
             <Button value={'done'}>back</Button>,
-            <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
-              confirm add
-            </Button>,
+            <Button.Transaction
+              target={`/tx-referrer-fee/${network}/${contractAddress}`}
+            >
+              set referrer fee
+            </Button.Transaction>,
           ];
         } else {
-          let insertError = await insertChannelRule(
+          // Validate there is no rule with the same contract address for this channel
+          let ruleExists = await doesRuleWithContractExist(
             channelId,
-            network,
-            contractAddress,
-            'AND',
-            'ALLOW'
+            contractAddress
           );
-          if (insertError) {
-            dynamicImage = `/api/frame-setup-add-error-rule-image/${channelId}`;
-            dynamicIntents = [
-              <TextInput placeholder="Contract Address..." />,
-              <Button value={'done'}>back</Button>,
-              <Button
-                value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}
-              >
-                try again
-              </Button>,
-            ];
+          if (ruleExists) {
+            dynamicImage = `/api/frame-setup-repeated-rule-image/${channelId}`;
+            dynamicIntents = [<Button value={'done'}>back</Button>];
           } else {
-            dynamicImage = `/api/frame-setup-add-complete-rule-image/${channelId}`;
-            dynamicIntents = [<Button value={'done'}>complete</Button>];
+            let insertError = await insertChannelRule(
+              channelId,
+              network,
+              contractAddress,
+              'AND',
+              'ALLOW'
+            );
+            if (insertError) {
+              dynamicImage = `/api/frame-setup-add-error-rule-image/${channelId}`;
+              dynamicIntents = [
+                <TextInput placeholder="contract address..." />,
+                <Button value={'done'}>back</Button>,
+                <Button
+                  value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}
+                >
+                  try again
+                </Button>,
+              ];
+            } else {
+              dynamicImage = `/api/frame-setup-add-complete-rule-image/${channelId}`;
+              dynamicIntents = [<Button value={'done'}>complete</Button>];
+            }
           }
         }
         console.log('addconfirm-: end');
@@ -1060,7 +1064,7 @@ app.image(
     if (parseInt(rulesCount) == 0) {
       textFrame = `This channel is currently open to everyone, as a channel lead, you can make it members only!`;
     } else {
-     `This channel currently requires ${rulesCount} ${parseInt(rulesCount) != 1 ? 'memberships' : 'membership'}. To purchase or renew one, lets start by veryfing some data.`; 
+      `This channel currently requires ${rulesCount} ${parseInt(rulesCount) != 1 ? 'memberships' : 'membership'}. To purchase or renew one, lets start by veryfing some data.`;
     }
     return c.res({
       imageOptions: {
@@ -1207,46 +1211,42 @@ app.image(
   }
 );
 
-app.image(
-  '/frame-tx-submitted-image/:channelId',
-  neynarMiddleware,
-  (c) => {
-    const { channelId } = c.req.param();
-    let textDescription = `Your tx has been submitted to the blockchain, please wait a few seconds, and then click on complete.`;
+app.image('/frame-tx-submitted-image/:channelId', neynarMiddleware, (c) => {
+  const { channelId } = c.req.param();
+  let textDescription = `Your tx has been submitted to the blockchain, please wait a few seconds, and then click on complete.`;
 
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
+  return c.res({
+    imageOptions: {
+      headers: {
+        'Cache-Control': 'max-age=0',
       },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly user</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textDescription}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
+    },
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor="yellow"
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly user</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textDescription}
+          </Text>
+        </VStack>
+      </Box>
+    ),
+  });
+});
 
 app.image(
   '/frame-purchase-approval-image/:channelId',
@@ -1638,10 +1638,17 @@ app.image(
 );
 
 app.image(
-  '/frame-setup-add-rule-image/:channelId/:network/:lockName/:lockAddress',
+  '/frame-setup-add-rule-image/:channelId/:network/:lockName/:lockAddress/:currentLock/:totalLocks',
   neynarMiddleware,
   (c) => {
-    const { channelId, network, lockName, lockAddress } = c.req.param();
+    const {
+      channelId,
+      network,
+      lockName,
+      lockAddress,
+      currentLock,
+      totalLocks,
+    } = c.req.param();
     let textFrame = `Do you want to add the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network as a requirement to cast on this channel?`;
     return c.res({
       imageOptions: {
@@ -1669,6 +1676,10 @@ app.image(
             <Spacer size="10" />
             <Text color={'black'} size="18">
               {textFrame}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {currentLock} of {totalLocks}
             </Text>
           </VStack>
         </Box>
