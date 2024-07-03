@@ -204,6 +204,7 @@ app.hono.post('/hook-setup', async (c: Context) => {
               if (!textFound) {
                   console.log('hook-setup => before updateWebhook: ');
                   const updatedRootParentUrls = [...new Set([...rootParentUrls, channel.parent_url])]; // Remove duplicates
+                  console.log('hook-setup => updatedRootParentUrls: ', updatedRootParentUrls);
                   const updateWebhook = await neynarClient.updateWebhook(
                       process.env.MO_HOOK_VALIDATE_ID!,
                       process.env.MO_HOOK_VALIDATE_TITLE!,
@@ -211,9 +212,7 @@ app.hono.post('/hook-setup', async (c: Context) => {
                       {
                           subscription: {
                               'cast.created': {
-                                  [Object.keys(castCreatedFilter)[0]]: {
-                                    root_parent_urls: updatedRootParentUrls,
-                                  },
+                                  root_parent_urls: updatedRootParentUrls,
                               },
                           },
                       }
