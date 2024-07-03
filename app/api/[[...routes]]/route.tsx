@@ -501,6 +501,16 @@ app.frame(
                 ]
               );
               dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/false/${lockTokenSymbol}/${lockTokenPriceVisual}/0`;
+              console.log('/frame-purchase/:channelId => channelId: ', channelId);
+              console.log('/frame-purchase/:channelId => network: ', currentRule.network);
+              console.log('/frame-purchase/:channelId => lockName: ', lockName);
+              console.log('/frame-purchase/:channelId => isValid: ', false);
+              console.log('/frame-purchase/:channelId => lockTokenSymbol: ', lockTokenSymbol);
+              console.log('/frame-purchase/:channelId => lockTokenPriceVisual: ', lockTokenPriceVisual);
+              console.log('/frame-purchase/:channelId => keyExpirationInSeconds: ', 0);
+              console.log('dynamicImage: ', dynamicImage);
+              //'/frame-purchase-rule-image/:channelId/:network/:lockName/:isValid/:lockTokenSymbol/:lockTokenPriceVisual/:keyExpirationInSeconds',
+              
               const allowBtn = () => {
                 if (erc20Allowance < lockPrice) {
                   return (
