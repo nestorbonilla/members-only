@@ -196,31 +196,33 @@ app.hono.post('/hook-setup', async (c: Context) => {
               targetWebhook.subscription.filters['cast.created']
                 .root_parent_urls!;
             console.log('hook-setup => rootParentUrls: ', rootParentUrls);
-            const textFound = rootParentUrls
+            if (rootParentUrls && rootParentUrls.length > 0) {
+              const textFound = rootParentUrls
               .map((url) => url.includes(channel?.url!))
               .includes(true);
               console.log('hook-setup => textFound: ', textFound);
-            if (!textFound) {
-              console.log('hook-setup => before updateWebhook: ');
-              const updateWebhook = await neynarClient.updateWebhook(
-                process.env.MO_HOOK_VALIDATE_ID!,
-                process.env.MO_HOOK_VALIDATE_TITLE!,
-                process.env.MO_HOOK_VALIDATE_TARGET_URL!,
-                {
-                  subscription: {
-                    'cast.created': {
-                      root_parent_urls: [
-                        ...rootParentUrls,
-                        channel?.parent_url!,
-                      ],
+              if (!textFound) {
+                console.log('hook-setup => before updateWebhook: ');
+                const updateWebhook = await neynarClient.updateWebhook(
+                  process.env.MO_HOOK_VALIDATE_ID!,
+                  process.env.MO_HOOK_VALIDATE_TITLE!,
+                  process.env.MO_HOOK_VALIDATE_TARGET_URL!,
+                  {
+                    subscription: {
+                      'cast.created': {
+                        root_parent_urls: [
+                          ...rootParentUrls,
+                          channel?.parent_url!,
+                        ],
+                      },
                     },
-                  },
-                }
-              );
-              console.log('hook-setup => updateWebhook: ', updateWebhook);
-              updateWebhook.success
-                ? console.log('Validate webhook updated successfully')
-                : console.log('Failed to update validate webhook');
+                  }
+                );
+                console.log('hook-setup => updateWebhook: ', updateWebhook);
+                updateWebhook.success
+                  ? console.log('Validate webhook updated successfully')
+                  : console.log('Failed to update validate webhook');
+              }
             }
           }
 
