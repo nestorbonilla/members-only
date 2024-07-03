@@ -138,7 +138,6 @@ app.hono.post('/hook-setup', async (c: Context) => {
     console.log('hook-setup => status: ', status);
     
     const body = await req.json();
-    console.log('hook-setup => body: ', body);
     let cast: Cast = body.data;
     console.log('hook-setup => cast: ', cast);
     console.log('hook-setup => root_parent_url: ', cast.root_parent_url);
