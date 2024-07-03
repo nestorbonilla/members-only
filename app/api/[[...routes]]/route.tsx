@@ -36,6 +36,7 @@ import {
   getTokenExpiration,
 } from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
+import { Context } from 'hono';
 
 const app = new Frog({
   title: 'Members Only',
@@ -129,10 +130,10 @@ const statusMessage = {
   },
 };
 
-app.hono.post('/hook-setup', async (c) => {
+app.hono.post('/hook-setup', async (c: Context) => {
   try {
     console.log('call start: hook-setup');
-
+    const { status, req } = c;
     const body = await c.req.json();
     console.log('hook-setup => body: ', body);
     let cast: Cast = body.data;
@@ -151,9 +152,13 @@ app.hono.post('/hook-setup', async (c) => {
 
     // 1.3 Compare the channel owner and the cast author and validate the cast text is "@membersonly setup"
     let castText = cast.text;
+    
+    console.log('hook-setup => channelLead: ', channelLead);
+    console.log('hook-setup => castAuthor: ', castAuthor);
 
     if (channelLead == castAuthor) {
       if (castText == process.env.BOT_SETUP_TEXT) {
+        console.log('hook-setup => before publish cast: ');
         const castResponse = await neynarClient.publishCast(
           process.env.SIGNER_UUID!,
           '',
@@ -166,19 +171,23 @@ app.hono.post('/hook-setup', async (c) => {
             ],
           }
         );
+        console.log('hook-setup => castResponse: ', castResponse);
         if (castResponse.hash) {
           // Now let's update the validate hook
           const webhooks = await neynarClient
             .fetchWebhooks()
             .then((res) => res.webhooks);
+            console.log('hook-setup => webhooks: ', webhooks);
           const targetWebhook = webhooks.find(
             (webhook) => webhook.title === process.env.MO_HOOK_VALIDATE_TITLE
           );
+          console.log('hook-setup => targetWebhook: ', targetWebhook);
           if (
             !targetWebhook ||
             !targetWebhook.subscription ||
             !targetWebhook.subscription.filters['cast.created']
           ) {
+            console.log('hook-setup => no hook found');
             throw new Error(
               `Webhook with title "${process.env.MO_HOOK_VALIDATE_TITLE}" or its filters not found.`
             );
@@ -186,10 +195,13 @@ app.hono.post('/hook-setup', async (c) => {
             let rootParentUrls =
               targetWebhook.subscription.filters['cast.created']
                 .root_parent_urls!;
+            console.log('hook-setup => rootParentUrls: ', rootParentUrls);
             const textFound = rootParentUrls
-              .map((url) => url.includes(channel?.parent_url!))
+              .map((url) => url.includes(channel?.url!))
               .includes(true);
+              console.log('hook-setup => textFound: ', textFound);
             if (!textFound) {
+              console.log('hook-setup => before updateWebhook: ');
               const updateWebhook = await neynarClient.updateWebhook(
                 process.env.MO_HOOK_VALIDATE_ID!,
                 process.env.MO_HOOK_VALIDATE_TITLE!,
@@ -205,6 +217,7 @@ app.hono.post('/hook-setup', async (c) => {
                   },
                 }
               );
+              console.log('hook-setup => updateWebhook: ', updateWebhook);
               updateWebhook.success
                 ? console.log('Validate webhook updated successfully')
                 : console.log('Failed to update validate webhook');
