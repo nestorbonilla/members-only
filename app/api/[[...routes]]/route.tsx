@@ -1064,7 +1064,7 @@ app.image(
     if (parseInt(rulesCount) == 0) {
       textFrame = `This channel is currently open to everyone, as a channel lead, you can make it members only!`;
     } else {
-      `This channel currently requires ${rulesCount} ${parseInt(rulesCount) != 1 ? 'memberships' : 'membership'}. To purchase or renew one, lets start by veryfing some data.`;
+      textFrame = `This channel currently requires ${rulesCount} ${parseInt(rulesCount) != 1 ? 'memberships' : 'membership'}. To purchase or renew one, lets start by veryfing some data.`;
     }
     return c.res({
       imageOptions: {
@@ -1170,6 +1170,11 @@ app.image(
         ),
       });
     } else {
+      console.log('is not valid');
+      console.log('lockName', lockName);
+      console.log('network', network);
+      console.log('lockTokenPriceVisual', lockTokenPriceVisual);
+      console.log('lockTokenSymbol', lockTokenSymbol);
       textDescription = ` You dont own a valid membership for the lock "${lockName}", deployed on ${network} network.`;
       textPrice = `It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
       return c.res({
