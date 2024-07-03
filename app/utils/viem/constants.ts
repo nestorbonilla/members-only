@@ -1,4 +1,4 @@
-import { createPublicClient, http, erc20Abi } from 'viem';
+import { createPublicClient, http, erc20Abi, isAddress } from 'viem';
 import { base, optimism, arbitrum } from 'viem/chains';
 import { contracts } from '@unlock-protocol/contracts';
 
@@ -40,20 +40,23 @@ export const getMembersOnlyReferralFee = async (
 export const getLockName = async (
   lockAddress: string,
   network: string
-): Promise<any> => {
+): Promise<string | null> => {
   let client = getClient(network);
-  let lockName = '';
   try {
+    if (!isAddress(lockAddress)) {
+      throw new Error(`Invalid contract address: ${lockAddress}`);
+    }
     let readContractResult = await client.readContract({
-      address: lockAddress as `0x${string}`,
+      address: lockAddress,
       abi: contracts.PublicLockV14.abi,
       functionName: 'name',
     });
-    lockName = readContractResult!.toString();
+    let lockName = readContractResult!.toString();
+    return lockName;
   } catch (error) {
-    console.log('Contract address not a Lock contract.');
+    console.error(`Error fetching lock name for ${lockAddress} on ${network}:`, error);
+    return null;
   }
-  return lockName;
 };
 
 export const getLockIsValid = async (
