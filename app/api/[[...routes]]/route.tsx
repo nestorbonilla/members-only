@@ -135,7 +135,9 @@ app.hono.post('/hook-setup', async (c: Context) => {
     console.log('call start: hook-setup');
     const { status, req } = c;
     
-    const body = await c.req.json();
+    console.log('hook-setup => status: ', status);
+    
+    const body = await req.json();
     console.log('hook-setup => body: ', body);
     let cast: Cast = body.data;
     console.log('hook-setup => cast: ', cast);
@@ -193,7 +195,7 @@ app.hono.post('/hook-setup', async (c: Context) => {
           } else {
             const castCreatedFilter = targetWebhook.subscription.filters['cast.created'];
             console.log('hook-setup => castCreatedFilter: ', castCreatedFilter);
-            let rootParentUrls = castCreatedFilter && Object.values(castCreatedFilter)[0].root_parent_urls || [];
+            let rootParentUrls = castCreatedFilter.root_parent_urls || [];
             console.log('hook-setup => rootParentUrls: ', rootParentUrls);
             // Ensure channel is defined
             if (channel && channel.url && channel.parent_url) {
@@ -202,6 +204,7 @@ app.hono.post('/hook-setup', async (c: Context) => {
 
               if (!textFound) {
                   console.log('hook-setup => before updateWebhook: ');
+                  const updatedRootParentUrls = [...new Set([...rootParentUrls, channel.parent_url])]; // Remove duplicates
                   const updateWebhook = await neynarClient.updateWebhook(
                       process.env.MO_HOOK_VALIDATE_ID!,
                       process.env.MO_HOOK_VALIDATE_TITLE!,
@@ -210,7 +213,7 @@ app.hono.post('/hook-setup', async (c: Context) => {
                           subscription: {
                               'cast.created': {
                                   [Object.keys(castCreatedFilter)[0]]: {
-                                    root_parent_urls: [...rootParentUrls, channel.parent_url],
+                                    root_parent_urls: updatedRootParentUrls,
                                   },
                               },
                           },
