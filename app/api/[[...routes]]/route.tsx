@@ -134,6 +134,7 @@ app.hono.post('/hook-setup', async (c: Context) => {
   try {
     console.log('call start: hook-setup');
     const { status, req } = c;
+    
     const body = await c.req.json();
     console.log('hook-setup => body: ', body);
     let cast: Cast = body.data;
@@ -174,9 +175,7 @@ app.hono.post('/hook-setup', async (c: Context) => {
         console.log('hook-setup => castResponse: ', castResponse);
         if (castResponse.hash) {
           // Now let's update the validate hook
-          const webhooks = await neynarClient
-            .fetchWebhooks()
-            .then((res) => res.webhooks);
+          const webhooks = await neynarClient.fetchWebhooks().then((res) => res.webhooks);
             console.log('hook-setup => webhooks: ', webhooks);
           const targetWebhook = webhooks.find(
             (webhook) => webhook.title === process.env.MO_HOOK_VALIDATE_TITLE
@@ -192,37 +191,39 @@ app.hono.post('/hook-setup', async (c: Context) => {
               `Webhook with title "${process.env.MO_HOOK_VALIDATE_TITLE}" or its filters not found.`
             );
           } else {
-            let rootParentUrls =
-              targetWebhook.subscription.filters['cast.created']
-                .root_parent_urls!;
+            const castCreatedFilter = targetWebhook.subscription.filters['cast.created'];
+            console.log('hook-setup => castCreatedFilter: ', castCreatedFilter);
+            let rootParentUrls = castCreatedFilter && Object.values(castCreatedFilter)[0].root_parent_urls || [];
             console.log('hook-setup => rootParentUrls: ', rootParentUrls);
-            if (rootParentUrls && rootParentUrls.length > 0) {
-              const textFound = rootParentUrls
-              .map((url) => url.includes(channel?.url!))
-              .includes(true);
+            // Ensure channel is defined
+            if (channel && channel.url && channel.parent_url) {
+              const textFound = rootParentUrls.some((url: string) => url.includes(channel.url));
               console.log('hook-setup => textFound: ', textFound);
+
               if (!textFound) {
-                console.log('hook-setup => before updateWebhook: ');
-                const updateWebhook = await neynarClient.updateWebhook(
-                  process.env.MO_HOOK_VALIDATE_ID!,
-                  process.env.MO_HOOK_VALIDATE_TITLE!,
-                  process.env.MO_HOOK_VALIDATE_TARGET_URL!,
-                  {
-                    subscription: {
-                      'cast.created': {
-                        root_parent_urls: [
-                          ...rootParentUrls,
-                          channel?.parent_url!,
-                        ],
-                      },
-                    },
-                  }
-                );
-                console.log('hook-setup => updateWebhook: ', updateWebhook);
-                updateWebhook.success
-                  ? console.log('Validate webhook updated successfully')
-                  : console.log('Failed to update validate webhook');
+                  console.log('hook-setup => before updateWebhook: ');
+                  const updateWebhook = await neynarClient.updateWebhook(
+                      process.env.MO_HOOK_VALIDATE_ID!,
+                      process.env.MO_HOOK_VALIDATE_TITLE!,
+                      process.env.MO_HOOK_VALIDATE_TARGET_URL!,
+                      {
+                          subscription: {
+                              'cast.created': {
+                                  [Object.keys(castCreatedFilter)[0]]: {
+                                    root_parent_urls: [...rootParentUrls, channel.parent_url],
+                                  },
+                              },
+                          },
+                      }
+                  );
+
+                  console.log('hook-setup => updateWebhook: ', updateWebhook);
+                  updateWebhook.success
+                      ? console.log('Validate webhook updated successfully')
+                      : console.log('Failed to update validate webhook');
               }
+            } else {
+              console.error("Channel information is missing or incomplete");
             }
           }
 
