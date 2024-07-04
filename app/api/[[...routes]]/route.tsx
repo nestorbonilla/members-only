@@ -134,10 +134,10 @@ app.hono.post('/hook-setup', async (c: Context) => {
   try {
     console.log('call start: hook-setup');
     const { status, req } = c;
-    
+
     const body = await req.json();
     let cast: Cast = body.data;
-    
+
     // 1. Validate the cast author is the owner of the channel
     // 1.1 Get the channel owner
     let channel = await getChannel(cast.root_parent_url!);
@@ -149,7 +149,7 @@ app.hono.post('/hook-setup', async (c: Context) => {
 
     // 1.3 Compare the channel owner and the cast author and validate the cast text is "@membersonly setup"
     let castText = cast.text;
-    
+
     if (channelLead == castAuthor) {
       if (castText == process.env.BOT_SETUP_TEXT) {
         const castResponse = await neynarClient.publishCast(
@@ -166,7 +166,9 @@ app.hono.post('/hook-setup', async (c: Context) => {
         );
         if (castResponse.hash) {
           // Now let's update the validate hook
-          const webhooks = await neynarClient.fetchWebhooks().then((res) => res.webhooks);
+          const webhooks = await neynarClient
+            .fetchWebhooks()
+            .then((res) => res.webhooks);
           const targetWebhook = webhooks.find(
             (webhook) => webhook.title === process.env.MO_HOOK_VALIDATE_TITLE
           );
@@ -179,31 +181,36 @@ app.hono.post('/hook-setup', async (c: Context) => {
               `Webhook with title "${process.env.MO_HOOK_VALIDATE_TITLE}" or its filters not found.`
             );
           } else {
-            const castCreatedFilter = targetWebhook.subscription.filters['cast.created'];
+            const castCreatedFilter =
+              targetWebhook.subscription.filters['cast.created'];
             let rootParentUrls = castCreatedFilter.root_parent_urls || [];
             // Ensure channel is defined
             if (channel && channel.url && channel.parent_url) {
-              const textFound = rootParentUrls.some((url: string) => url.includes(channel.url));
+              const textFound = rootParentUrls.some((url: string) =>
+                url.includes(channel.url)
+              );
               if (!textFound) {
-                  const updatedRootParentUrls = [...new Set([...rootParentUrls, channel.parent_url])]; // Remove duplicates
-                  const updateWebhook = await neynarClient.updateWebhook(
-                      process.env.MO_HOOK_VALIDATE_ID!,
-                      process.env.MO_HOOK_VALIDATE_TITLE!,
-                      process.env.MO_HOOK_VALIDATE_TARGET_URL!,
-                      {
-                          subscription: {
-                              'cast.created': {
-                                  root_parent_urls: updatedRootParentUrls,
-                              },
-                          },
-                      }
-                  );
-                  updateWebhook.success
-                      ? console.log('Validate webhook updated successfully')
-                      : console.log('Failed to update validate webhook');
+                const updatedRootParentUrls = [
+                  ...new Set([...rootParentUrls, channel.parent_url]),
+                ]; // Remove duplicates
+                const updateWebhook = await neynarClient.updateWebhook(
+                  process.env.MO_HOOK_VALIDATE_ID!,
+                  process.env.MO_HOOK_VALIDATE_TITLE!,
+                  process.env.MO_HOOK_VALIDATE_TARGET_URL!,
+                  {
+                    subscription: {
+                      'cast.created': {
+                        root_parent_urls: updatedRootParentUrls,
+                      },
+                    },
+                  }
+                );
+                updateWebhook.success
+                  ? console.log('Validate webhook updated successfully')
+                  : console.log('Failed to update validate webhook');
               }
             } else {
-              console.error("Channel information is missing or incomplete");
+              console.error('Channel information is missing or incomplete');
             }
           }
 
@@ -721,7 +728,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
             )
           )
         ).flat();
-        
+
         if (!contractAddresses || contractAddresses.length === 0) {
           dynamicImage = `/api/frame-setup-no-lock-image/${channelId}`;
           dynamicIntents = [
@@ -820,51 +827,59 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           contractAddress,
           network
         );
-        if (referralFee < process.env.MO_MINIMUM_REFERRAL_FEE!) {
-          let lockName = await getLockName(contractAddress, network);
-          dynamicImage = `/api/frame-setup-referrer-fee-image/${channelId}/${network}/${lockName}/${contractAddress}`;
-          dynamicIntents = [
-            <TextInput placeholder="custom referrer fee..." />,
-            <Button value={'done'}>back</Button>,
-            <Button.Transaction
-              target={`/tx-referrer-fee/${network}/${contractAddress}`}
-            >
-              set referrer fee
-            </Button.Transaction>,
-          ];
-        } else {
-          // Validate there is no rule with the same contract address for this channel
-          let ruleExists = await doesRuleWithContractExist(
-            channelId,
-            contractAddress
-          );
-          if (ruleExists) {
-            dynamicImage = `/api/frame-setup-repeated-rule-image/${channelId}`;
-            dynamicIntents = [<Button value={'done'}>back</Button>];
+        if (referralFee !== null) {
+          const minReferralFee = BigInt(process.env.MO_MINIMUM_REFERRAL_FEE!);
+          if (referralFee < minReferralFee) {
+            let lockName = await getLockName(contractAddress, network);
+            dynamicImage = `/api/frame-setup-referrer-fee-image/${channelId}/${network}/${lockName}/${contractAddress}`;
+            dynamicIntents = [
+              <TextInput placeholder="custom referrer fee..." />,
+              <Button value={'done'}>back</Button>,
+              <Button.Transaction
+                target={`/tx-referrer-fee/${network}/${contractAddress}`}
+              >
+                set referrer fee
+              </Button.Transaction>,
+            ];
           } else {
-            let insertError = await insertChannelRule(
+            // Validate there is no rule with the same contract address for this channel
+            let ruleExists = await doesRuleWithContractExist(
               channelId,
-              network,
-              contractAddress,
-              'AND',
-              'ALLOW'
+              contractAddress
             );
-            if (insertError) {
-              dynamicImage = `/api/frame-setup-add-error-rule-image/${channelId}`;
-              dynamicIntents = [
-                <TextInput placeholder="contract address..." />,
-                <Button value={'done'}>back</Button>,
-                <Button
-                  value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}
-                >
-                  try again
-                </Button>,
-              ];
+            if (ruleExists) {
+              dynamicImage = `/api/frame-setup-repeated-rule-image/${channelId}`;
+              dynamicIntents = [<Button value={'done'}>back</Button>];
             } else {
-              dynamicImage = `/api/frame-setup-add-complete-rule-image/${channelId}`;
-              dynamicIntents = [<Button value={'done'}>complete</Button>];
+              let insertError = await insertChannelRule(
+                channelId,
+                network,
+                contractAddress,
+                'AND',
+                'ALLOW'
+              );
+              if (insertError) {
+                dynamicImage = `/api/frame-setup-add-error-rule-image/${channelId}`;
+                dynamicIntents = [
+                  <TextInput placeholder="contract address..." />,
+                  <Button value={'done'}>back</Button>,
+                  <Button
+                    value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}
+                  >
+                    try again
+                  </Button>,
+                ];
+              } else {
+                dynamicImage = `/api/frame-setup-add-complete-rule-image/${channelId}`;
+                dynamicIntents = [<Button value={'done'}>complete</Button>];
+              }
             }
           }
+        } else {
+          dynamicImage = `/api/frame-setup-no-lock-found-image/${channelId}/${network}/${contractAddress}`;
+          dynamicIntents = [
+            <Button value={'done'}>back</Button>
+          ];
         }
         console.log('addconfirm-: end');
       } else if (buttonValue!.startsWith('removepage-')) {
@@ -1055,6 +1070,46 @@ app.image(
     } else {
       textFrame = `This channel currently requires ${rulesCount} ${parseInt(rulesCount) != 1 ? 'memberships' : 'membership'}. To purchase or renew one, lets start by veryfing some data.`;
     }
+    return c.res({
+      imageOptions: {
+        headers: {
+          'Cache-Control': 'max-age=0',
+        },
+      },
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly user</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
+    });
+  }
+);
+
+app.image(
+  '/frame-setup-no-lock-found-image/:channelId/:network/:contractAddress',
+  neynarMiddleware,
+  (c) => {
+    const { channelId, network, contractAddress } = c.req.param();
+    let textFrame = `No lock found at ${contractAddress} on ${network} network. Please add a valid membership lock address.`;
     return c.res({
       imageOptions: {
         headers: {

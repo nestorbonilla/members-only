@@ -26,15 +26,29 @@ const getViemNetwork = (network: string) => {
 export const getMembersOnlyReferralFee = async (
   contractAddress: string,
   network: string
-): Promise<any> => {
-  let client = getClient(network);
-  let referralFee = await client.readContract({
-    address: contractAddress as `0x${string}`,
-    abi: contracts.PublicLockV14.abi,
-    functionName: 'referrerFees',
-    args: [process.env.MO_ADDRESS],
-  });
-  return referralFee;
+): Promise<bigint | null> => {
+  try {
+    if (!isAddress(contractAddress)) {
+      throw new Error(`Invalid contract address: ${contractAddress}`);
+    }
+
+    let client = getClient(network);
+
+    const referralFee = (await client.readContract({
+      address: contractAddress,
+      abi: contracts.PublicLockV14.abi,
+      functionName: 'referrerFees',
+      args: [process.env.MO_ADDRESS!],
+    })) as bigint | null;
+
+    return referralFee; // referralFee is already a bigint
+  } catch (error) {
+    console.error(
+      `Error fetching referral fee for ${contractAddress} on ${network}:`,
+      error
+    );
+    return null;
+  }
 };
 
 export const getLockName = async (
@@ -54,7 +68,10 @@ export const getLockName = async (
     let lockName = readContractResult!.toString();
     return lockName;
   } catch (error) {
-    console.error(`Error fetching lock name for ${lockAddress} on ${network}:`, error);
+    console.error(
+      `Error fetching lock name for ${lockAddress} on ${network}:`,
+      error
+    );
     return null;
   }
 };
