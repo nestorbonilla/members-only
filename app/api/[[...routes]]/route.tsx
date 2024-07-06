@@ -518,7 +518,7 @@ app.frame(
                   return (
                     // /tx-purchase/:lockAddress/:network/:ethAddress
                     <Button.Transaction
-                      target={`/tx-purchase/${currentRule.network}/${currentRule.contract_address}/${ethAddresses[0]}`}
+                      target={`/tx-purchase/${currentRule.network}/${currentRule.contract_address}/${lockTokenSymbol}/${ethAddresses[0]}`}
                     >
                       buy
                     </Button.Transaction>
@@ -1000,11 +1000,12 @@ app.transaction(
 );
 
 app.transaction(
-  '/tx-purchase/:network/:lockAddress/:userAddress',
+  '/tx-purchase/:network/:lockAddress/:lockTokenSymbol/:userAddress',
   async (c) => {
     const { req } = c;
     let network = req.param('network');
     let lockAddress = req.param('lockAddress');
+    let lockTokenSymbol = req.param('lockTokenSymbol');    
     let userAddress = req.param('userAddress');
     let lockPrice = await getLockPrice(lockAddress, network);
 
@@ -1014,20 +1015,38 @@ app.transaction(
     let paramLockPrice = BigInt(lockPrice);
     type EipChainId = 'eip155:8453' | 'eip155:10' | 'eip155:42161';
     let paramChainId: EipChainId = getEipChainId(network);
+    console.log(`About to buy/renew a key for lock ${paramLockAddress} on ${paramChainId} network for ${lockPrice} ${lockTokenSymbol} from address ${userAddress}.`);
 
-    return c.contract({
-      abi: contracts.PublicLockV14.abi,
-      chainId: paramChainId,
-      functionName: 'purchase',
-      args: [
-        [paramLockPrice], // _values uint256[]
-        [paramUserAddress], // _recipients address[]
-        [paramMOAddress], // _referrers address[]
-        [paramUserAddress], // _keyManagers address[]
-        [''], // _data bytes[]
-      ],
-      to: paramLockAddress,
-    });
+    if (lockTokenSymbol == 'ETH') {
+      return c.contract({
+        abi: contracts.PublicLockV14.abi,
+        chainId: paramChainId,
+        functionName: 'purchase',
+        args: [
+          [paramLockPrice], // _values uint256[]
+          [paramUserAddress], // _recipients address[]
+          [paramMOAddress], // _referrers address[]
+          [paramUserAddress], // _keyManagers address[]
+          [''], // _data bytes[]
+        ],
+        to: paramLockAddress,
+        value: paramLockPrice,
+      });
+    } else {
+      return c.contract({
+        abi: contracts.PublicLockV14.abi,
+        chainId: paramChainId,
+        functionName: 'purchase',
+        args: [
+          [paramLockPrice], // _values uint256[]
+          [paramUserAddress], // _recipients address[]
+          [paramMOAddress], // _referrers address[]
+          [paramUserAddress], // _keyManagers address[]
+          [''], // _data bytes[]
+        ],
+        to: paramLockAddress,
+      });
+    }
   }
 );
 
