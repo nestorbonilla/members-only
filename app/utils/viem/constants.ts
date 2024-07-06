@@ -163,26 +163,64 @@ export const getTotalSupply = async (
   return totalSupply;
 };
 
+export const getBalanceOf = async (
+  userAddress: string,
+  lockAddress: string,
+  network: string
+): Promise<any> => {
+  let client = getClient(network);
+  const balance = await client.readContract({
+    address: lockAddress as `0x${string}`,
+    abi: contracts.PublicLockV14.abi,
+    functionName: 'balanceOf',
+    args: [userAddress],
+  });
+  console.log(
+    `What's the balance of the lock ${lockAddress} deployed on ${network} for address ${userAddress}? It is ${balance}`
+  );
+  return balance;
+};
+
+export const getIsValidKey = async (
+  tokenId: number,
+  lockAddress: string,
+  network: string
+): Promise<any> => {
+  let client = getClient(network);
+  const isValid = await client.readContract({
+    address: lockAddress as `0x${string}`,
+    abi: contracts.PublicLockV14.abi,
+    functionName: 'isValidKey',
+    args: [tokenId],
+  });
+  console.log(
+    `Is key number ${tokenId} a valid key for the lock ${lockAddress} deployed on ${network}?${isValid}`
+  );
+  return isValid;
+};
+
 export const getFirstTokenIdOfOwner = async (
   userAddresses: string[],
   totalKeysCount: number,
-  contractAddress: string,
+  lockAddress: string,
   network: string
-) => {
+): Promise<{ tokenId: number; userAddress: string } | null> => {
   for (const userAddress of userAddresses) {
-    for (let index = 0; index < totalKeysCount; index++) {
-      const idToken = await getTokenOfOwnerByIndex(
-        userAddress,
-        index,
-        contractAddress,
-        network
-      );
-      if (idToken > 0) {
-        return idToken; // Found an owned key, return the idToken
+    const balance = await getBalanceOf(userAddress, lockAddress, network);
+    
+    if (balance > 0) { // Check if user has any tokens before querying for specific IDs
+      for (let index = 0; index < totalKeysCount; index++) {
+        for (let index = 0; index < balance; index++) { 
+          const tokenId = await getTokenOfOwnerByIndex(userAddress, index, lockAddress, network);          
+          const isValid = await getIsValidKey(tokenId, lockAddress, network);          
+          if (isValid) {
+            return { tokenId, userAddress };
+          }
+        }
       }
     }
   }
-  return 0; // No owned keys found
+  return null; // No owned keys found
 };
 
 export const getTokenOfOwnerByIndex = async (

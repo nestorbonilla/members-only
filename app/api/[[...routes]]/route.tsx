@@ -406,6 +406,10 @@ app.frame(
           }
         };
         if (buttonValue == 'verify' || buttonValue?.startsWith('page-')) {
+          
+          let tokenId: number | null = null;
+          let userAddress: string | null = null;
+          
           if (channelRules.length > 0) {
             let currentRule: any;
             let currentPage = 0;
@@ -442,7 +446,7 @@ app.frame(
               (sum, count) => sum + Number(count),
               0
             );
-            let tokenId = await getFirstTokenIdOfOwner(
+            let tokenInfo = await getFirstTokenIdOfOwner(
               ethAddresses,
               totalKeysCount,
               currentRule.contract_address,
@@ -475,12 +479,13 @@ app.frame(
             lockTokenPriceVisual = formatUnits(lockPrice, lockTokenDecimals);
             // is membership renewable or allowed to buy a new one?
             // if yes, then show the 'increase allowance' button
-            if (membershipIsValidForAtLeastOneAddress) {
+            if (membershipIsValidForAtLeastOneAddress && tokenInfo) {
               console.log(
                 statusMessage[ApiRoute.FRAME_PURCHASE][
                   FramePurchaseResult.FRAME_MEMBERSHIP_VALID
                 ]
               );
+              ({ tokenId, userAddress } = tokenInfo);
               // if membership is valid, then if it's renewable
               let keyExpirationInSeconds = await getTokenExpiration(
                 tokenId,
@@ -512,11 +517,10 @@ app.frame(
               const buyBtn = () => {
                 if (
                   erc20Allowance >= lockPrice &&
-                  !membershipIsValidForAtLeastOneAddress &&
-                  totalKeysCount == 0
+                  totalKeysCount == 0 &&
+                  (!tokenInfo || tokenInfo.tokenId === 0) // Check if tokenInfo is null OR tokenId is 0
                 ) {
                   return (
-                    // /tx-purchase/:lockAddress/:network/:ethAddress
                     <Button.Transaction
                       target={`/tx-purchase/${currentRule.network}/${currentRule.contract_address}/${lockTokenSymbol}/${ethAddresses[0]}`}
                     >
@@ -527,12 +531,18 @@ app.frame(
               };
 
               const renewBtn = async () => {
-                if (erc20Allowance >= lockPrice && totalKeysCount > 0) {
+                if (
+                  erc20Allowance >= lockPrice &&
+                  totalKeysCount > 0 &&
+                  tokenInfo?.tokenId &&
+                  tokenInfo.tokenId > 0 // Explicit check for tokenId > 0
+                ) {
+                  const tokenIdForRenewal = tokenInfo?.tokenId;
                   // Before renewing the key, let's verify if it is renewable
                   let isRenewable = true;
                   if (isRenewable) {
                     // One or more keys are expired, so let's renew the first we found
-                    if (tokenId > 0) {
+                    
                       return (
                         // /tx-renew/:network/:lockAddress/:tokenId/:price
                         <Button.Transaction
@@ -541,7 +551,7 @@ app.frame(
                           renew
                         </Button.Transaction>
                       );
-                    }
+                    
                   }
                 }
               };
@@ -1184,9 +1194,10 @@ app.image(
     ]);
 
     if (booleanMap.get(isValid)) {
-      let keyExpirationMiliseconds = new Date(
-        Number(keyExpirationInSeconds) * 1000
-      ); // Convert to milliseconds
+      const currentTimeMs = Date.now();
+      const keyExpirationMiliseconds = Number(keyExpirationInSeconds) * 1000;
+      const remainingTimeDays = (keyExpirationMiliseconds - currentTimeMs) / (1000 * 60 * 60 * 24); // Days remaining
+      const showExpirationTime = remainingTimeDays <= 30; // Threshold of 30 days
       const options: Intl.DateTimeFormatOptions = {
         year: 'numeric',
         month: 'long',
@@ -1196,11 +1207,11 @@ app.image(
         second: 'numeric',
         timeZoneName: 'short', // Optional: Show timezone
       };
-      let keyExpirationString = keyExpirationMiliseconds.toLocaleString(
-        undefined,
-        options
-      );
-      textDescription = ` You own a valid membership for the lock "${lockName}", deployed on ${network} network, and is valid til ${keyExpirationString}`;
+      let keyExpirationDate = new Date(keyExpirationMiliseconds);
+      let keyExpirationString = keyExpirationDate.toLocaleString(undefined, options);
+      textDescription = showExpirationTime
+        ? ` You own a valid membership for the lock "${lockName}", deployed on ${network} network, and is valid til ${keyExpirationString}`
+        : ` You own a valid membership for the lock "${lockName}", deployed on ${network} network.`;
       return c.res({
         imageOptions: {
           headers: {
