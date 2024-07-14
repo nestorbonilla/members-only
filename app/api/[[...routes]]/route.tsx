@@ -345,12 +345,10 @@ app.frame(
   '/frame-purchase/:channelId',
   neynarMiddleware,
   async (c: FrameContext) => {
-    console.log('call start: frame-purchase/:channelId');
     const { buttonValue, status, req } = c;
     let ethAddresses: string[] = [];
     let channelId = req.param('channelId');
     let textFrame = '';
-    let dynamicImage = '';
     let dynamicIntents: any[] = [];
     let totalKeysCount = 0;
     let erc20Allowance = BigInt(0);
@@ -365,8 +363,8 @@ app.frame(
       (status == 'response' && buttonValue == 'done')
     ) {
       // Step 1: Show the number of rules on the channel
-      dynamicImage = `/api/frame-purchase-initial-image/${channelId}/${channelRules?.length}`;
-      dynamicIntents = [<Button value="verify">verify</Button>];
+      textFrame = `This channel requires membership(s). To purchase or renew one, let's verify some details.`;
+      dynamicIntents = [<Button value="verify">go</Button>];
     } else if (status == 'response') {
       const payload = await req.json();
       if (process.env.NODE_ENV === 'production') {
@@ -406,10 +404,9 @@ app.frame(
           }
         };
         if (buttonValue == 'verify' || buttonValue?.startsWith('page-')) {
-          
           let tokenId: number | null = null;
           let userAddress: string | null = null;
-          
+
           if (channelRules.length > 0) {
             let currentRule: any;
             let currentPage = 0;
@@ -492,7 +489,30 @@ app.frame(
                 currentRule.contract_address,
                 currentRule.network
               );
-              dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/true/${lockTokenSymbol}/${lockTokenPriceVisual}/${keyExpirationInSeconds}`;
+              const currentTimeMs = Date.now();
+              const keyExpirationMiliseconds =
+                Number(keyExpirationInSeconds) * 1000;
+              const remainingTimeDays =
+                (keyExpirationMiliseconds - currentTimeMs) /
+                (1000 * 60 * 60 * 24); // Days remaining
+              const showExpirationTime = remainingTimeDays <= 30; // Threshold of 30 days
+              const options: Intl.DateTimeFormatOptions = {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                second: 'numeric',
+                timeZoneName: 'short', // Optional: Show timezone
+              };
+              let keyExpirationDate = new Date(keyExpirationMiliseconds);
+              let keyExpirationString = keyExpirationDate.toLocaleString(
+                undefined,
+                options
+              );
+              textFrame = showExpirationTime
+                ? ` You own a valid membership for "${lockName}", deployed on ${currentRule.network} network, and is valid til ${keyExpirationString}`
+                : ` You own a valid membership for "${lockName}", deployed on ${currentRule.network} network.`;
               dynamicIntents = [
                 <Button value="done">complete</Button>,
                 prevBtn(currentPage),
@@ -504,8 +524,7 @@ app.frame(
                   FramePurchaseResult.FRAME_MEMBERSHIP_INVALID
                 ]
               );
-              dynamicImage = `/api/frame-purchase-rule-image/${channelId}/${currentRule.network}/${lockName}/false/${lockTokenSymbol}/${lockTokenPriceVisual}/0`;
-
+              textFrame = ` You don't own a valid membership for the lock "${lockName}", deployed on ${currentRule.network} network. It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
               const allowBtn = () => {
                 if (erc20Allowance < lockPrice) {
                   return (
@@ -539,19 +558,16 @@ app.frame(
                 ) {
                   const tokenIdForRenewal = tokenInfo?.tokenId;
                   // Before renewing the key, let's verify if it is renewable
-                  let isRenewable = true;
+                  let isRenewable = !tokenInfo?.isValid;
                   if (isRenewable) {
                     // One or more keys are expired, so let's renew the first we found
-                    
-                      return (
-                        // /tx-renew/:network/:lockAddress/:tokenId/:price
-                        <Button.Transaction
-                          target={`/tx-renew/${currentRule.network}/${currentRule.contract_address}/${tokenId}/${lockPrice}`}
-                        >
-                          renew
-                        </Button.Transaction>
-                      );
-                    
+                    return (
+                      <Button.Transaction
+                        target={`/tx-renew/${currentRule.network}/${currentRule.contract_address}/${tokenIdForRenewal}/${lockPrice}`}
+                      >
+                        renew
+                      </Button.Transaction>
+                    );
                   }
                 }
               };
@@ -565,11 +581,11 @@ app.frame(
               ];
             }
           } else {
-            dynamicImage = `/api/frame-purchase-no-rules-image/${channelId}`;
-            dynamicIntents = [<Button value="verify">verify</Button>];
+            textFrame = `It seems there are no rules currently to purchase for this channel.`;
+            dynamicIntents = [<Button value="verify">complete</Button>];
           }
         } else if (buttonValue?.startsWith('approval-')) {
-          dynamicImage = `/api/frame-purchase-approval-image/${channelId}`;
+          textFrame = `Do you want to approve one time (default), or multiple times? (set a number higher than 1)`;
           let [_, page] = buttonValue!.split('-');
           let currentPage = parseInt(page);
           let currentRule = channelRules[currentPage];
@@ -590,16 +606,39 @@ app.frame(
             </Button.Transaction>,
           ];
         } else if (buttonValue == '_t') {
-          dynamicImage = `/api/frame-tx-submitted-image/${channelId}`;
+          textFrame = `Transaction sent! It's on its way to the blockchain. Just a short wait, then click "continue."`;
           dynamicIntents = [<Button value="done">continue</Button>];
         }
       } else {
-        dynamicImage = `/api/frame-purchase-no-address-image/${channelId}`;
+        textFrame = `No verified Ethereum address found. Please verify at least one address to continue.`;
       }
     }
     return c.res({
       title: 'Members Only - Membership Purchase',
-      image: dynamicImage,
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+          borderStyle="solid"
+          borderRadius="8"
+          borderWidth="4"
+          borderColor="yellow"
+        >
+          <VStack gap="4">
+            <Heading color={'black'}>@membersonly user</Heading>
+            <Spacer size="20" />
+            <Text color={'black'} size="20">
+              Channel: {channelId}
+            </Text>
+            <Spacer size="10" />
+            <Text color={'black'} size="18">
+              {textFrame}
+            </Text>
+          </VStack>
+        </Box>
+      ),
       intents: dynamicIntents,
     });
   }
@@ -612,7 +651,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   let interactorIsChannelLead = false;
   let channelId = req.param('channelId');
   let textFrame = '';
-  let dynamicImage = '';
   let dynamicIntents: any[] = [];
   let conditions = 0;
 
@@ -665,33 +703,38 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   }
 
   if (status == 'initial' || (status == 'response' && buttonValue == 'done')) {
-    // Step 1: Show the number of rules on the channel
-    let lockName;
-    if (channelRules?.length! > 0) {
-      lockName = await getLockName(
-        channelRules![0].contract_address,
-        channelRules![0].network
-      );
-    }
-    dynamicImage = `/api/frame-setup-initial-image/${channelId}/${conditions}`;
-    if (channelRules?.length! == 0) {
-      dynamicIntents = [<Button value="add">add</Button>];
-    } else {
-      if (conditions >= Number(process.env.ACCESS_RULES_LIMIT)) {
-        dynamicIntents = [<Button value="remove">remove</Button>];
-      } else {
-        dynamicIntents = [
-          <Button value="add">add</Button>,
-          <Button value="remove">remove</Button>,
-        ];
-      }
-    }
+    // Step 1: Show general information about the frame
+    textFrame = `Let's set up membersonly to manage your channel memberships.`;
+    dynamicIntents = [<Button value="go">go</Button>];
   } else if (status == 'response') {
     if (interactorIsChannelLead) {
-      // Step 2: Show action to achieve, either add or remove a rule
-      if (buttonValue == 'add' || buttonValue == 'remove') {
+      // Step 2: Show action to do, either add or remove a rule
+      if (buttonValue == 'go') {
+        let lockName;
+        if (channelRules?.length! > 0) {
+          lockName = await getLockName(
+            channelRules![0].contract_address,
+            channelRules![0].network
+          );
+        }
+        if (channelRules?.length! == 0) {
+          textFrame = `You currently have no membership requirements for this channel. Let's add one.`;
+          dynamicIntents = [<Button value="add">add</Button>];
+        } else {
+          if (conditions >= Number(process.env.ACCESS_RULES_LIMIT)) {
+            textFrame = `You currently have ${channelRules?.length!} membership requirement${channelRules?.length! > 1 ? 's' : ''} for this channel.\n ${lockName} (${shortenAddress(channelRules![0].contract_address)}) deployed on ${channelRules![0].network} network.`;
+            dynamicIntents = [<Button value="remove">remove</Button>];
+          } else {
+            textFrame = `You currently have ${channelRules?.length!} membership requirement${channelRules?.length! > 1 ? 's' : ''} for this channel.`;
+            dynamicIntents = [
+              <Button value="add">add</Button>,
+              <Button value="remove">remove</Button>,
+            ];
+          }
+        }
+      } else if (buttonValue == 'add' || buttonValue == 'remove') {
         if (buttonValue == 'add') {
-          dynamicImage = `/api/frame-setup-network-image/${channelId}`;
+          textFrame = `Please select the network where your membership contract is deployed.`;
           dynamicIntents = [
             <Button value="base">base</Button>,
             <Button value="optimism">optimism</Button>,
@@ -704,7 +747,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
             }
           };
           if (channelRules?.length! == 0) {
-            dynamicImage = `/api/frame-setup-no-rules-image/${channelId}`;
+            textFrame = `There are no membership requirements to remove.`;
             dynamicIntents = [<Button value="done">back</Button>];
           } else {
             let currentRule = channelRules[0];
@@ -713,12 +756,13 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
               currentRule.contract_address,
               currentRule.network
             );
-            dynamicImage = `/api/frame-setup-remove-rule-image/${channelId}/${currentRule.network}/${lockName}/${currentRule.contract_address}`;
+            textFrame = `Do you want to remove the membership requirement for "${lockName}" (${shortenAddress(currentRule.contract_address)}) on ${currentRule.network} network?`;
             dynamicIntents = [
               nextBtn(1),
               <Button value={`removeconfirm-${firstContractAddress}`}>
-                confirm remove
+                yes
               </Button>,
+              <Button value={`done`}>no</Button>,
             ];
           }
         }
@@ -740,7 +784,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         ).flat();
 
         if (!contractAddresses || contractAddresses.length === 0) {
-          dynamicImage = `/api/frame-setup-no-lock-image/${channelId}`;
+          textFrame = `No membership contracts found under your management on ${buttonValue} network. To set up a requirement, you can use a custom address (Unlock Membership).`;
           dynamicIntents = [
             <TextInput placeholder="contract address..." />,
             <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
@@ -761,20 +805,25 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           let lockName = await getLockName(contractAddresses[0], network);
           let currentLock = 1;
           let totalLocks = contractAddresses.length;
-          // here i need to add an extra step, if not I'm asking for the referral fee automatically
-          dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[0]}/${currentLock}/${totalLocks}`;
+          textFrame = `Found ${currentLock} of ${totalLocks} membership contract${totalLocks > 1 ? 's' : ''}: "${lockName}" (${shortenAddress(contractAddresses[0])}). Use this or enter a custom address.`;
           dynamicIntents = [
-            <TextInput placeholder="contract address..." />,
             nextBtn(0),
             <Button value={`addconfirm-${network}-${contractAddresses[0]}`}>
-              confirm
+              use
             </Button>,
-            <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
-              custom
-            </Button>,
+            <Button value={`custom-${network}`}>custom</Button>,
           ];
         }
         console.log('network selection: end');
+      } else if (buttonValue!.startsWith('custom-')) {
+        let [_, network] = buttonValue!.split('-');
+        textFrame = `Add your custom address.`;
+        dynamicIntents = [
+          <TextInput placeholder="contract address..." />,
+          <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
+            use
+          </Button>,
+        ];
       } else if (buttonValue!.startsWith('addpage-')) {
         console.log('addpage-: start');
         // Step 4: Show the contract address to confirm or write a new one
@@ -810,15 +859,14 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         let currentLock = currentPage + 1;
         let totalLocks = contractAddresses.length;
         // here i need to add an extra step, if not I'm asking for the referral fee automatically
-        dynamicImage = `/api/frame-setup-add-rule-image/${channelId}/${network}/${lockName}/${contractAddresses[currentPage]}/${currentLock}/${totalLocks}`;
+        textFrame = `Found ${currentLock} of ${totalLocks} membership contract${totalLocks > 1 ? 's' : ''}: "${lockName}" (${shortenAddress(contractAddresses[currentPage])}). Use this or enter a custom address.`;
         dynamicIntents = [
-          <TextInput placeholder="contract address..." />,
           prevBtn(currentPage),
           nextBtn(currentPage),
           <Button
             value={`addconfirm-${network}-${contractAddresses[currentPage]}`}
           >
-            confirm
+            use
           </Button>,
           <Button value={`addconfirm-${network}-${process.env.ZERO_ADDRESS}`}>
             custom
@@ -839,11 +887,10 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         );
         if (referralFee !== null) {
           const minReferralFee = BigInt(process.env.MO_MINIMUM_REFERRAL_FEE!);
+          let lockName = await getLockName(contractAddress, network);
           if (referralFee < minReferralFee) {
-            let lockName = await getLockName(contractAddress, network);
-            dynamicImage = `/api/frame-setup-referrer-fee-image/${channelId}/${network}/${lockName}/${contractAddress}`;
+            textFrame = `To add "${lockName}" (${shortenAddress(contractAddress)}) on ${network} network as a membership requirement, please set a 5% referrer fee to @membersonly.`;
             dynamicIntents = [
-              <TextInput placeholder="custom referrer fee..." />,
               <Button value={'done'}>back</Button>,
               <Button.Transaction
                 target={`/tx-referrer-fee/${network}/${contractAddress}`}
@@ -858,7 +905,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
               contractAddress
             );
             if (ruleExists) {
-              dynamicImage = `/api/frame-setup-repeated-rule-image/${channelId}`;
+              textFrame = `The membership requirement for "${lockName}" (${shortenAddress(contractAddress)}) on ${network} network is already set for this channel.`;
               dynamicIntents = [<Button value={'done'}>back</Button>];
             } else {
               let insertError = await insertChannelRule(
@@ -869,7 +916,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
                 'ALLOW'
               );
               if (insertError) {
-                dynamicImage = `/api/frame-setup-add-error-rule-image/${channelId}`;
+                textFrame = `We encountered an issue while adding the membership requirement. Please try again or contact @membersonly for support.`;
                 dynamicIntents = [
                   <TextInput placeholder="contract address..." />,
                   <Button value={'done'}>back</Button>,
@@ -880,16 +927,14 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
                   </Button>,
                 ];
               } else {
-                dynamicImage = `/api/frame-setup-add-complete-rule-image/${channelId}`;
+                textFrame = `Membership requirement added.`;
                 dynamicIntents = [<Button value={'done'}>complete</Button>];
               }
             }
           }
         } else {
-          dynamicImage = `/api/frame-setup-no-lock-found-image/${channelId}/${network}/${contractAddress}`;
-          dynamicIntents = [
-            <Button value={'done'}>back</Button>
-          ];
+          textFrame = `No membership contract found at "${contractAddress}" on ${network} network. Please try again.`;
+          dynamicIntents = [<Button value={'done'}>back</Button>];
         }
         console.log('addconfirm-: end');
       } else if (buttonValue!.startsWith('removepage-')) {
@@ -902,7 +947,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           currentRule.contract_address,
           currentRule.network
         );
-        dynamicImage = `/api/frame-setup-remove-rule-image/${channelId}/${currentRule.network}/${lockName}/${currentRule.contract_address}`;
+        textFrame = `Remove "${lockName}" (${shortenAddress(currentRule.contract_address)}) on ${currentRule.network} network as a membership requirement?`;
         const prevBtn = (index: number) => {
           if (channelRules.length > 0 && index > 0) {
             return <Button value={`removepage-${index - 1}`}>prev</Button>;
@@ -917,7 +962,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           prevBtn(currentPage),
           nextBtn(currentPage),
           <Button value={`removeconfirm-${currentRule.contract_address}`}>
-            confirm remove
+            yes
           </Button>,
         ];
         console.log('removepage-: end');
@@ -926,7 +971,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
         let [_, contractAddress] = buttonValue!.split('-');
         let deleteError = await deleteChannelRule(channelId, contractAddress);
         if (deleteError) {
-          dynamicImage = `/api/frame-setup-remove-error-rule-image/${channelId}`;
+          textFrame = `We encountered an issue while removing the membership requirement. Please try again or contact @membersonly for support.`;
           dynamicIntents = [
             <Button value={'done'}>Restart</Button>,
             <Button value={`removeconfirm-${contractAddress}`}>
@@ -934,25 +979,46 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
             </Button>,
           ];
         } else {
-          dynamicImage = `/api/frame-setup-remove-complete-rule-image/${channelId}`;
+          textFrame = `Membership requirement removed.`;
           dynamicIntents = [<Button value={'done'}>complete</Button>];
         }
         console.log('removeconfirm-: end');
       } else if (buttonValue == '_t') {
-        dynamicImage = `/api/frame-tx-submitted-image/${channelId}`;
+        textFrame = `Transaction sent! It's on its way to the blockchain. Just a short wait, then click "continue."`;
         dynamicIntents = [<Button value="done">continue</Button>];
       }
     } else {
-      textFrame =
-        'This is a @membersonly frame to configure rules, know more about me at my profile.';
-      dynamicImage = `/api/frame-setup-no-access-image/${channelId}`;
+      textFrame = `It looks like you're not the lead of this channel. If you are, please ensure you're using the correct account.`;
       dynamicIntents = [];
     }
   }
   console.log('call end: frame-setup-channel/:channelId');
   return c.res({
     title: 'Members Only - Channel Setup',
-    image: dynamicImage,
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        borderStyle="solid"
+        borderRadius="8"
+        borderWidth="4"
+        borderColor="yellow"
+      >
+        <VStack gap="4">
+          <Heading color={'black'}>@membersonly moderator</Heading>
+          <Spacer size="20" />
+          <Text color={'black'} size="20">
+            Channel: {channelId}
+          </Text>
+          <Spacer size="10" />
+          <Text color={'black'} size="18">
+            {textFrame}
+          </Text>
+        </VStack>
+      </Box>
+    ),
     intents: dynamicIntents,
   });
 });
@@ -1015,7 +1081,7 @@ app.transaction(
     const { req } = c;
     let network = req.param('network');
     let lockAddress = req.param('lockAddress');
-    let lockTokenSymbol = req.param('lockTokenSymbol');    
+    let lockTokenSymbol = req.param('lockTokenSymbol');
     let userAddress = req.param('userAddress');
     let lockPrice = await getLockPrice(lockAddress, network);
 
@@ -1025,7 +1091,9 @@ app.transaction(
     let paramLockPrice = BigInt(lockPrice);
     type EipChainId = 'eip155:8453' | 'eip155:10' | 'eip155:42161';
     let paramChainId: EipChainId = getEipChainId(network);
-    console.log(`About to buy/renew a key for lock ${paramLockAddress} on ${paramChainId} network for ${lockPrice} ${lockTokenSymbol} from address ${userAddress}.`);
+    console.log(
+      `About to buy/renew a key for lock ${paramLockAddress} on ${paramChainId} network for ${lockPrice} ${lockTokenSymbol} from address ${userAddress}.`
+    );
 
     if (lockTokenSymbol == 'ETH') {
       return c.contract({
@@ -1087,880 +1155,6 @@ app.transaction('/tx-renew/:network/:lockAddress/:tokenId/:price', (c) => {
     to: paramLockAddress,
   });
 });
-
-app.image(
-  '/frame-purchase-initial-image/:channelId/:rulesCount',
-  neynarMiddleware,
-  (c) => {
-    const { channelId, rulesCount } = c.req.param();
-    let textFrame = '';
-    if (parseInt(rulesCount) == 0) {
-      textFrame = `This channel is currently open to everyone, as a channel lead, you can make it members only!`;
-    } else {
-      textFrame = `This channel currently requires ${rulesCount} ${parseInt(rulesCount) != 1 ? 'memberships' : 'membership'}. To purchase or renew one, lets start by veryfing some data.`;
-    }
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly user</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-setup-no-lock-found-image/:channelId/:network/:contractAddress',
-  neynarMiddleware,
-  (c) => {
-    const { channelId, network, contractAddress } = c.req.param();
-    let textFrame = `No lock found at ${contractAddress} on ${network} network. Please add a valid membership lock address.`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly user</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-purchase-rule-image/:channelId/:network/:lockName/:isValid/:lockTokenSymbol/:lockTokenPriceVisual/:keyExpirationInSeconds',
-  neynarMiddleware,
-  (c) => {
-    const {
-      channelId,
-      network,
-      lockName,
-      isValid,
-      lockTokenSymbol,
-      lockTokenPriceVisual,
-      keyExpirationInSeconds,
-    } = c.req.param();
-    let textDescription = '';
-    let textPrice = '';
-    const booleanMap = new Map([
-      ['true', true],
-      ['false', false],
-    ]);
-
-    if (booleanMap.get(isValid)) {
-      const currentTimeMs = Date.now();
-      const keyExpirationMiliseconds = Number(keyExpirationInSeconds) * 1000;
-      const remainingTimeDays = (keyExpirationMiliseconds - currentTimeMs) / (1000 * 60 * 60 * 24); // Days remaining
-      const showExpirationTime = remainingTimeDays <= 30; // Threshold of 30 days
-      const options: Intl.DateTimeFormatOptions = {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        second: 'numeric',
-        timeZoneName: 'short', // Optional: Show timezone
-      };
-      let keyExpirationDate = new Date(keyExpirationMiliseconds);
-      let keyExpirationString = keyExpirationDate.toLocaleString(undefined, options);
-      textDescription = showExpirationTime
-        ? ` You own a valid membership for the lock "${lockName}", deployed on ${network} network, and is valid til ${keyExpirationString}`
-        : ` You own a valid membership for the lock "${lockName}", deployed on ${network} network.`;
-      return c.res({
-        imageOptions: {
-          headers: {
-            'Cache-Control': 'max-age=0',
-          },
-        },
-        image: (
-          <Box
-            grow
-            alignHorizontal="center"
-            backgroundColor="background"
-            padding="32"
-            borderStyle="solid"
-            borderRadius="8"
-            borderWidth="4"
-            borderColor="yellow"
-          >
-            <VStack gap="4">
-              <Heading color={'black'}>@membersonly user</Heading>
-              <Spacer size="20" />
-              <Text color={'black'} size="20">
-                Channel: {channelId}
-              </Text>
-              <Spacer size="10" />
-              <Text color={'black'} size="18">
-                {textDescription}
-              </Text>
-            </VStack>
-          </Box>
-        ),
-      });
-    } else {
-      textDescription = ` You dont own a valid membership for the lock "${lockName}", deployed on ${network} network.`;
-      textPrice = `It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
-      return c.res({
-        imageOptions: {
-          headers: {
-            'Cache-Control': 'max-age=0',
-          },
-        },
-        image: (
-          <Box
-            grow
-            alignHorizontal="center"
-            backgroundColor="background"
-            padding="32"
-            borderStyle="solid"
-            borderRadius="8"
-            borderWidth="4"
-            borderColor="yellow"
-          >
-            <VStack gap="4">
-              <Heading color={'black'}>@membersonly user</Heading>
-              <Spacer size="20" />
-              <Text color={'black'} size="20">
-                Channel: {channelId}
-              </Text>
-              <Spacer size="10" />
-              <Text color={'black'} size="18">
-                {textDescription}
-              </Text>
-              <Spacer size="10" />
-              <Text color={'black'} size="18">
-                {textPrice}
-              </Text>
-            </VStack>
-          </Box>
-        ),
-      });
-    }
-  }
-);
-
-app.image('/frame-tx-submitted-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textDescription = `Your tx has been submitted to the blockchain, please wait a few seconds, and then click on complete.`;
-
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
-      },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor="yellow"
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly user</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textDescription}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
-
-app.image(
-  '/frame-purchase-approval-image/:channelId',
-  neynarMiddleware,
-  (c) => {
-    const { channelId } = c.req.param();
-    let textDescription = `Do you want to approve one time (default), or multiple times? (set a number higher than 1)`;
-
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly user</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textDescription}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-purchase-no-address-image/:channelId',
-  neynarMiddleware,
-  (c) => {
-    const { channelId } = c.req.param();
-    let textDescription = `It seems you dont have any eth address verified. Please verify at least one address to proceed.`;
-
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly user</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textDescription}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-purchase-no-rules-image/:channelId',
-  neynarMiddleware,
-  (c) => {
-    const { channelId } = c.req.param();
-    let textDescription = `It seems there are no rules currently to purchase for this channel. Please contact the channel lead to add rules.`;
-
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly user</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textDescription}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-setup-initial-image/:channelId/:rulesCount',
-  neynarMiddleware,
-  (c) => {
-    const { channelId, rulesCount } = c.req.param();
-    let textFrame = `This channel has ${rulesCount} ${parseInt(rulesCount) != 1 ? 'rules' : 'rule'}. As channel lead, you can add or remove rules.`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly moderator</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image('/frame-setup-network-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textFrame = `Start by selecting the network on which the membership contract has ben deployed.`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
-      },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor="yellow"
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
-
-app.image('/frame-setup-no-rules-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textFrame = `There are no rules to remove on this channel.`;
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
-      },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor="yellow"
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
-
-app.image(
-  '/frame-setup-repeated-rule-image/:channelId',
-  neynarMiddleware,
-  (c) => {
-    const { channelId } = c.req.param();
-    let textFrame = `A rule with this membership already exists. Please select another membership.`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly moderator</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image('/frame-setup-no-lock-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textFrame =
-    'There are no locks deployed from your accounts, please set one on the input and click confirm. (It must be an Unlock contract)';
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
-      },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor="yellow"
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
-
-app.image('/frame-setup-no-access-image/:channelId', neynarMiddleware, (c) => {
-  const { channelId } = c.req.param();
-  let textFrame =
-    'To access this frame, you need to be the owner of the this channel.';
-  return c.res({
-    imageOptions: {
-      headers: {
-        'Cache-Control': 'max-age=0',
-      },
-    },
-    image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        borderStyle="solid"
-        borderRadius="8"
-        borderWidth="4"
-        borderColor="yellow"
-      >
-        <VStack gap="4">
-          <Heading color={'black'}>@membersonly moderator</Heading>
-          <Spacer size="20" />
-          <Text color={'black'} size="20">
-            Channel: {channelId}
-          </Text>
-          <Spacer size="10" />
-          <Text color={'black'} size="18">
-            {textFrame}
-          </Text>
-        </VStack>
-      </Box>
-    ),
-  });
-});
-
-app.image(
-  '/frame-setup-referrer-fee-image/:channelId/:network/:lockName/:lockAddress',
-  neynarMiddleware,
-  (c) => {
-    const { channelId, network, lockName, lockAddress } = c.req.param();
-    let textFrame = `To add a rule with the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network, please add a min. of 5% of referral fee to @membersonly for future purchases or renewals.`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly moderator</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-setup-add-rule-image/:channelId/:network/:lockName/:lockAddress/:currentLock/:totalLocks',
-  neynarMiddleware,
-  (c) => {
-    const {
-      channelId,
-      network,
-      lockName,
-      lockAddress,
-      currentLock,
-      totalLocks,
-    } = c.req.param();
-    let textFrame = `Do you want to add the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network as a requirement to cast on this channel?`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly moderator</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {currentLock} of {totalLocks}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-setup-add-complete-rule-image/:channelId',
-  neynarMiddleware,
-  (c) => {
-    const { channelId } = c.req.param();
-    let textFrame = `The rule was added successfully.`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly moderator</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-setup-add-error-rule-image/:channelId',
-  neynarMiddleware,
-  (c) => {
-    const { channelId } = c.req.param();
-    let textFrame = `There was an error trying to add the rule. Please, try again.`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly moderator</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-setup-remove-rule-image/:channelId/:network/:lockName/:lockAddress',
-  neynarMiddleware,
-  (c) => {
-    const { channelId, network, lockName, lockAddress } = c.req.param();
-    let textFrame = `Do you want to remove the lock "${lockName}" (${shortenAddress(lockAddress)}) deployed on ${network} network as a requirement to cast on this channel?`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly moderator</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-setup-remove-complete-rule-image/:channelId',
-  neynarMiddleware,
-  (c) => {
-    const { channelId } = c.req.param();
-    let textFrame = `The rule was removed successfully.`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly moderator</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
-
-app.image(
-  '/frame-setup-remove-error-rule-image/:channelId',
-  neynarMiddleware,
-  (c) => {
-    const { channelId } = c.req.param();
-    let textFrame = `There was an error trying to remove the rule. Please, try again.`;
-    return c.res({
-      imageOptions: {
-        headers: {
-          'Cache-Control': 'max-age=0',
-        },
-      },
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-          borderStyle="solid"
-          borderRadius="8"
-          borderWidth="4"
-          borderColor="yellow"
-        >
-          <VStack gap="4">
-            <Heading color={'black'}>@membersonly moderator</Heading>
-            <Spacer size="20" />
-            <Text color={'black'} size="20">
-              Channel: {channelId}
-            </Text>
-            <Spacer size="10" />
-            <Text color={'black'} size="18">
-              {textFrame}
-            </Text>
-          </VStack>
-        </Box>
-      ),
-    });
-  }
-);
 
 //_______________________________________________________________________________________________________________________
 // Utils

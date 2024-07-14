@@ -204,19 +204,18 @@ export const getFirstTokenIdOfOwner = async (
   totalKeysCount: number,
   lockAddress: string,
   network: string
-): Promise<{ tokenId: number; userAddress: string } | null> => {
+): Promise<{ tokenId: number; isValid: number, userAddress: string } | null> => {
   for (const userAddress of userAddresses) {
-    const balance = await getBalanceOf(userAddress, lockAddress, network);
-    
-    if (balance > 0) { // Check if user has any tokens before querying for specific IDs
-      for (let index = 0; index < totalKeysCount; index++) {
-        for (let index = 0; index < balance; index++) { 
-          const tokenId = await getTokenOfOwnerByIndex(userAddress, index, lockAddress, network);          
-          const isValid = await getIsValidKey(tokenId, lockAddress, network);          
-          if (isValid) {
-            return { tokenId, userAddress };
-          }
-        }
+    for (let index = 0; index < totalKeysCount; index++) {
+      const tokenId = await getTokenOfOwnerByIndex(
+        userAddress,
+        index,
+        lockAddress,
+        network
+      );
+      if (tokenId) {
+        const isValid = await getIsValidKey(tokenId, lockAddress, network);
+        return { tokenId, isValid, userAddress };
       }
     }
   }
