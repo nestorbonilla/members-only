@@ -310,7 +310,7 @@ app.hono.post('/hook-validate', async (c) => {
           {
             embeds: [
               {
-                url: `${process.env.APP_URL}/api/frame-purchase/${channel?.id}`, // Get at https://app.unlock-protocol.com/locks/checkout-url
+                url: `${process.env.APP_URL}/api/frame-purchase/${channel?.id}`,
               },
             ],
           }
@@ -525,6 +525,20 @@ app.frame(
                 ]
               );
               textFrame = ` You don't own a valid membership for the lock "${lockName}", deployed on ${currentRule.network} network. It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
+              
+              console.log("erc20Allowance: ", erc20Allowance);
+              console.log("lockPrice: ", lockPrice);
+              console.log("totalKeysCount: ", totalKeysCount);
+              console.log("tokenInfo: ", tokenInfo);
+              console.log("erc20Allowance >= lockPrice: ", erc20Allowance >= lockPrice);
+              console.log("totalKeysCount: ", totalKeysCount);
+              console.log("!tokenInfo || tokenInfo.tokenId === 0: ", !tokenInfo || tokenInfo.tokenId === 0);
+              console.log("ethAddresses[0]: ", ethAddresses[0]);
+              console.log("currentRule.network: ", currentRule.network);
+              console.log("currentRule.contract_address: ", currentRule.contract_address);
+              console.log("lockTokenSymbol: ", lockTokenSymbol);
+              
+              
               const allowBtn = () => {
                 if (erc20Allowance < lockPrice) {
                   return (

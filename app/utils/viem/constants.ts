@@ -205,7 +205,6 @@ export const getFirstTokenIdOfOwner = async (
   lockAddress: string,
   network: string
 ): Promise<{ tokenId: number; isValid: number, userAddress: string } | null> => {
-  console.log("getFirstTokenIdOfOwner", userAddresses, totalKeysCount, lockAddress, network);
   for (const userAddress of userAddresses) {
     for (let index = 0; index < totalKeysCount; index++) {
       try {
