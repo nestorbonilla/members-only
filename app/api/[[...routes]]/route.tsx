@@ -358,12 +358,12 @@ app.frame(
 
     // Get the channel access rules
     let channelRules = await getChannelRules(channelId!);
+    textFrame = `This channel requires membership(s). To purchase or renew one, let's verify some details.`;
     if (
       status == 'initial' ||
       (status == 'response' && buttonValue == 'done')
     ) {
       // Step 1: Show the number of rules on the channel
-      textFrame = `This channel requires membership(s). To purchase or renew one, let's verify some details.`;
       dynamicIntents = [<Button value="verify">go</Button>];
     } else if (status == 'response') {
       const payload = await req.json();

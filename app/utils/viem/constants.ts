@@ -205,21 +205,26 @@ export const getFirstTokenIdOfOwner = async (
   lockAddress: string,
   network: string
 ): Promise<{ tokenId: number; isValid: number, userAddress: string } | null> => {
+  console.log("getFirstTokenIdOfOwner", userAddresses, totalKeysCount, lockAddress, network);
   for (const userAddress of userAddresses) {
     for (let index = 0; index < totalKeysCount; index++) {
-      const tokenId = await getTokenOfOwnerByIndex(
-        userAddress,
-        index,
-        lockAddress,
-        network
-      );
-      if (tokenId) {
-        const isValid = await getIsValidKey(tokenId, lockAddress, network);
-        return { tokenId, isValid, userAddress };
+      try {
+        const tokenId = await getTokenOfOwnerByIndex(
+          userAddress,
+          index,
+          lockAddress,
+          network
+        );
+        if (tokenId) {
+          const isValid = await getIsValidKey(tokenId, lockAddress, network);
+          return { tokenId, isValid, userAddress };
+        }
+      } catch (error) {
+        console.log(`No key with index ${index} found on address ${userAddress}`);
       }
     }
   }
-  return null; // No owned keys found
+  return null; // No owned keys found on all addresses
 };
 
 export const getTokenOfOwnerByIndex = async (
