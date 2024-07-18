@@ -204,7 +204,11 @@ export const getFirstTokenIdOfOwner = async (
   totalKeysCount: number,
   lockAddress: string,
   network: string
-): Promise<{ tokenId: number; isValid: number, userAddress: string } | null> => {
+): Promise<{
+  tokenId: number;
+  isValid: number;
+  userAddress: string;
+} | null> => {
   for (const userAddress of userAddresses) {
     for (let index = 0; index < totalKeysCount; index++) {
       try {
@@ -219,7 +223,9 @@ export const getFirstTokenIdOfOwner = async (
           return { tokenId, isValid, userAddress };
         }
       } catch (error) {
-        console.log(`No key with index ${index} found on address ${userAddress}`);
+        console.log(
+          `No key with index ${index} found on address ${userAddress}`
+        );
       }
     }
   }
@@ -290,17 +296,20 @@ export const doAddressesHaveValidMembershipInRules = async (
 
 export const getErc20Allowance = async (
   userAddress: string,
-  tokenAddress: string,
+  lockTokenAddress: string,
   lockAddress: string,
   network: string
 ): Promise<any> => {
   let client = getClient(network);
   const allowance = await client.readContract({
-    address: tokenAddress as `0x${string}`,
+    address: lockTokenAddress as `0x${string}`,
     abi: erc20Abi,
     functionName: 'allowance',
     args: [userAddress as `0x${string}`, lockAddress as `0x${string}`],
   });
+  console.log(
+    `What's the allowance of the lock ${lockAddress} deployed on ${network} for address ${userAddress} to spent token ${lockTokenAddress}? It is ${allowance}`
+  );
   return allowance;
 };
 

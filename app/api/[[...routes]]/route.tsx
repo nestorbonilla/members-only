@@ -518,15 +518,15 @@ app.frame(
                 <Button value="done">complete</Button>,
                 prevBtn(currentPage),
                 nextBtn(currentPage),
-              ].filter(intent => !!intent);
+              ].filter((intent) => !!intent);
             } else {
               console.log(
                 statusMessage[ApiRoute.FRAME_PURCHASE][
                   FramePurchaseResult.FRAME_MEMBERSHIP_INVALID
                 ]
               );
-              textFrame = ` You don't own a valid membership for the lock "${lockName}", deployed on ${currentRule.network} network. It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
-              
+              textFrame = ` You don't own a valid membership for the lock "${lockName}", deployed on ${currentRule.network} network. It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key. Please sign with address ${ethAddresses[0]}.`;
+
               const allowBtn = () => {
                 if (erc20Allowance < lockPrice) {
                   return (
@@ -543,7 +543,7 @@ app.frame(
                 ) {
                   return (
                     <Button.Transaction
-                      target={`/tx-purchase/${currentRule.network}/${currentRule.contract_address}/${lockTokenSymbol}/${ethAddresses[0]}`}
+                      target={`/tx-purchase/${currentRule.network}/${currentRule.contract_address}/${lockTokenSymbol}/${ethAddresses[0]}/${lockPrice}`}
                     >
                       buy
                     </Button.Transaction>
@@ -580,16 +580,16 @@ app.frame(
                 allowBtn(),
                 buyBtn(),
                 renewBtn(),
-              ].filter(intent => !!intent);
+              ].filter((intent) => !!intent);
             }
           } else {
             textFrame = `It seems there are no rules currently to purchase for this channel.`;
-            dynamicIntents = [
-              <Button value="verify">complete</Button>
-            ].filter(intent => !!intent);
+            dynamicIntents = [<Button value="verify">complete</Button>].filter(
+              (intent) => !!intent
+            );
           }
         } else if (buttonValue?.startsWith('approval-')) {
-          textFrame = 'Do you want to approve one time (default), or multiple times? (set a number higher than 1)';
+          textFrame = `Do you want to approve one time (default), or multiple times? (set a number higher than 1). Please sign with address ${ethAddresses[0]}.`;
           let [_, page] = buttonValue!.split('-');
           let currentPage = parseInt(page);
           let currentRule = channelRules[currentPage];
@@ -608,12 +608,12 @@ app.frame(
             >
               approve
             </Button.Transaction>,
-          ].filter(intent => !!intent);
+          ].filter((intent) => !!intent);
         } else if (buttonValue == '_t') {
           textFrame = `Transaction sent! It's on its way to the blockchain. Just a short wait, then click "continue."`;
-          dynamicIntents = [
-            <Button value="done">continue</Button>
-          ].filter(intent => !!intent);
+          dynamicIntents = [<Button value="done">continue</Button>].filter(
+            (intent) => !!intent
+          );
         }
       } else {
         textFrame = `No verified Ethereum address found. Please verify at least one address to continue.`;
@@ -1081,14 +1081,14 @@ app.transaction(
 );
 
 app.transaction(
-  '/tx-purchase/:network/:lockAddress/:lockTokenSymbol/:userAddress',
-  async (c) => {
+  '/tx-purchase/:network/:lockAddress/:lockTokenSymbol/:userAddress/:lockPrice',
+  (c) => {
     const { req } = c;
     let network = req.param('network');
     let lockAddress = req.param('lockAddress');
     let lockTokenSymbol = req.param('lockTokenSymbol');
     let userAddress = req.param('userAddress');
-    let lockPrice = await getLockPrice(lockAddress, network);
+    let lockPrice = req.param('lockPrice');
 
     let paramLockAddress = lockAddress as `0x${string}`;
     let paramUserAddress = userAddress as `0x${string}`;
@@ -1163,29 +1163,6 @@ app.transaction('/tx-renew/:network/:lockAddress/:tokenId/:price', (c) => {
 
 //_______________________________________________________________________________________________________________________
 // Utils
-
-const getFrameImage = (text: string) => {
-  return (
-    <Box
-      grow
-      alignHorizontal="center"
-      backgroundColor="background"
-      padding="32"
-      borderStyle="solid"
-      borderRadius="8"
-      borderWidth="4"
-      borderColor={'yellow'}
-    >
-      <VStack gap="4">
-        <Heading color={'black'}>@membersonly Channel Bot</Heading>
-        <Spacer size="20" />
-        <Text color={'black'} size="20">
-          {text}
-        </Text>
-      </VStack>
-    </Box>
-  );
-};
 
 const getDistinctAddresses = async (fid: string): Promise<Address[]> => {
   let fetchedUsers: any = await neynarClient.fetchBulkUsers([Number(fid)]);
