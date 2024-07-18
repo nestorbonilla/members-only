@@ -15,13 +15,13 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@neynar/nodejs-sdk": "^1.33.0",
+    "@neynar/nodejs-sdk": "^1.37.3",
     "@supabase/ssr": "^0.4.0",
     "@supabase/supabase-js": "^2.43.5",
     "@unlock-protocol/contracts": "^0.0.27",
     "@unlock-protocol/networks": "^0.0.23",
     "dotenv": "^16.4.5",
-    "frog": "^0.12.0",
+    "frog": "^0.14.4",
     "hono": "^4",
     "next": "14.1.0",
     "react": "^18",

@@ -366,6 +366,7 @@ app.frame(
       // Step 1: Show the number of rules on the channel
       dynamicIntents = [<Button value="verify">go</Button>];
     } else if (status == 'response') {
+      console.log('accesing response');
       const payload = await req.json();
       if (process.env.NODE_ENV === 'production') {
         const frameActionResponse: ValidateFrameActionResponse =
@@ -526,23 +527,10 @@ app.frame(
               );
               textFrame = ` You don't own a valid membership for the lock "${lockName}", deployed on ${currentRule.network} network. It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key.`;
               
-              console.log("erc20Allowance: ", erc20Allowance);
-              console.log("lockPrice: ", lockPrice);
-              console.log("totalKeysCount: ", totalKeysCount);
-              console.log("tokenInfo: ", tokenInfo);
-              console.log("erc20Allowance >= lockPrice: ", erc20Allowance >= lockPrice);
-              console.log("totalKeysCount: ", totalKeysCount);
-              console.log("!tokenInfo || tokenInfo.tokenId === 0: ", !tokenInfo || tokenInfo.tokenId === 0);
-              console.log("ethAddresses[0]: ", ethAddresses[0]);
-              console.log("currentRule.network: ", currentRule.network);
-              console.log("currentRule.contract_address: ", currentRule.contract_address);
-              console.log("lockTokenSymbol: ", lockTokenSymbol);
-              
-              
               const allowBtn = () => {
                 if (erc20Allowance < lockPrice) {
                   return (
-                    <Button value={`approval-${0}`}>increase allowance</Button>
+                    <Button value={'approval-0'}>increase allowance</Button>
                   );
                 }
               };
@@ -599,7 +587,7 @@ app.frame(
             dynamicIntents = [<Button value="verify">complete</Button>];
           }
         } else if (buttonValue?.startsWith('approval-')) {
-          textFrame = `Do you want to approve one time (default), or multiple times? (set a number higher than 1)`;
+          textFrame = 'Do you want to approve one time (default), or multiple times? (set a number higher than 1)';
           let [_, page] = buttonValue!.split('-');
           let currentPage = parseInt(page);
           let currentRule = channelRules[currentPage];
@@ -1038,7 +1026,6 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
 });
 
 app.transaction('/tx-referrer-fee/:network/:lockAddress', (c) => {
-  console.log('call start: tx-referrer-fee/:network/:lockAddress');
   const { inputText, req } = c;
   let lockAddress = req.param('lockAddress');
   let network = req.param('network');
