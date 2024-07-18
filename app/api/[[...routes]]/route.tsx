@@ -518,7 +518,7 @@ app.frame(
                 <Button value="done">complete</Button>,
                 prevBtn(currentPage),
                 nextBtn(currentPage),
-              ];
+              ].filter(intent => !!intent);
             } else {
               console.log(
                 statusMessage[ApiRoute.FRAME_PURCHASE][
@@ -580,11 +580,13 @@ app.frame(
                 allowBtn(),
                 buyBtn(),
                 renewBtn(),
-              ].filter(intent => !!intent);;
+              ].filter(intent => !!intent);
             }
           } else {
             textFrame = `It seems there are no rules currently to purchase for this channel.`;
-            dynamicIntents = [<Button value="verify">complete</Button>];
+            dynamicIntents = [
+              <Button value="verify">complete</Button>
+            ].filter(intent => !!intent);
           }
         } else if (buttonValue?.startsWith('approval-')) {
           textFrame = 'Do you want to approve one time (default), or multiple times? (set a number higher than 1)';
@@ -609,7 +611,9 @@ app.frame(
           ].filter(intent => !!intent);
         } else if (buttonValue == '_t') {
           textFrame = `Transaction sent! It's on its way to the blockchain. Just a short wait, then click "continue."`;
-          dynamicIntents = [<Button value="done">continue</Button>];
+          dynamicIntents = [
+            <Button value="done">continue</Button>
+          ].filter(intent => !!intent);
         }
       } else {
         textFrame = `No verified Ethereum address found. Please verify at least one address to continue.`;
