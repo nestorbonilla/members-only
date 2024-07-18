@@ -551,7 +551,7 @@ app.frame(
                 }
               };
 
-              const renewBtn = async () => {
+              const renewBtn = () => {
                 if (
                   erc20Allowance >= lockPrice &&
                   totalKeysCount > 0 &&
@@ -579,8 +579,8 @@ app.frame(
                 nextBtn(currentPage),
                 allowBtn(),
                 buyBtn(),
-                await renewBtn(),
-              ];
+                renewBtn(),
+              ].filter(intent => !!intent);;
             }
           } else {
             textFrame = `It seems there are no rules currently to purchase for this channel.`;
@@ -606,7 +606,7 @@ app.frame(
             >
               approve
             </Button.Transaction>,
-          ];
+          ].filter(intent => !!intent);
         } else if (buttonValue == '_t') {
           textFrame = `Transaction sent! It's on its way to the blockchain. Just a short wait, then click "continue."`;
           dynamicIntents = [<Button value="done">continue</Button>];
