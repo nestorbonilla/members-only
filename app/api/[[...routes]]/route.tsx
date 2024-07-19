@@ -308,6 +308,7 @@ app.hono.post('/hook-validate', async (c) => {
           process.env.SIGNER_UUID!,
           textCast,
           {
+            replyTo: cast.hash,
             embeds: [
               {
                 url: `${process.env.APP_URL}/api/frame-purchase/${channel?.id}`,
