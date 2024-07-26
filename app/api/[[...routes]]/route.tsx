@@ -28,11 +28,13 @@ import {
   getErc20Decimals,
   getErc20Symbol,
   getFirstTokenIdOfOwner,
+  getIsLockManager,
   getLockName,
   getLockPrice,
   getLockTokenAddress,
   getLockTotalKeys,
   getMembersOnlyReferralFee,
+  getNetworkId,
   getTokenExpiration,
 } from '@/app/utils/viem/constants';
 import { contracts } from '@unlock-protocol/contracts';
@@ -896,15 +898,30 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
           const minReferralFee = BigInt(process.env.MO_MINIMUM_REFERRAL_FEE!);
           let lockName = await getLockName(contractAddress, network);
           if (referralFee < minReferralFee) {
-            textFrame = `To add "${lockName}" (${shortenAddress(contractAddress)}) on ${network} network as a membership requirement, please set a 5% referrer fee to @membersonly.`;
-            dynamicIntents = [
-              <Button value={'done'}>back</Button>,
-              <Button.Transaction
-                target={`/tx-referrer-fee/${network}/${contractAddress}`}
-              >
-                set referrer fee
-              </Button.Transaction>,
-            ];
+            //lockManager
+            let isLockManager = await getIsLockManager(ethAddresses[0], contractAddress, network);
+            if (isLockManager) {
+              textFrame = `To add "${lockName}" (${shortenAddress(contractAddress)}) on ${network} network as a membership requirement, as a lock manager, please set a 5% referrer fee to @membersonly.`;
+              dynamicIntents = [
+                <Button value={'done'}>back</Button>,
+                <Button.Transaction
+                  target={`/tx-referrer-fee/${network}/${contractAddress}`}
+                >
+                  set referrer fee
+                </Button.Transaction>,
+              ];  
+            } else {
+              let networkId = await getNetworkId(network);
+              textFrame = `To add "${lockName}" (${shortenAddress(contractAddress)}) on ${network} network as a membership requirement, please ask the lock manager to set a 5% referrer fee to @membersonly on the following link.`;
+              dynamicIntents = [
+                <Button value={'done'}>back</Button>,
+                <Button.Link href={`https://app.unlock-protocol.com/locks/settings?address=${contractAddress}&network=${networkId}`}
+                >
+                  set referrer fee
+                </Button.Link>,
+              ];
+            }
+            
           } else {
             // Validate there is no rule with the same contract address for this channel
             let ruleExists = await doesRuleWithContractExist(

@@ -23,6 +23,19 @@ const getViemNetwork = (network: string) => {
   }
 };
 
+export const getNetworkId = (network: string) => {
+  switch (network) {
+    case 'base':
+      return 8453;
+    case 'optimism':
+      return 10;
+    case 'arbitrum':
+      return 42161;
+    default:
+      throw new Error(`Unsupported network: ${network}`);
+  }
+};
+
 export const getMembersOnlyReferralFee = async (
   contractAddress: string,
   network: string
@@ -197,6 +210,24 @@ export const getIsValidKey = async (
     `Is key number ${tokenId} a valid key for the lock ${lockAddress} deployed on ${network}?${isValid}`
   );
   return isValid;
+};
+
+export const getIsLockManager = async (
+  userAddress: string,
+  lockAddress: string,
+  network: string
+): Promise<any> => {
+  let client = getClient(network);
+  const isLockManager = await client.readContract({
+    address: lockAddress as `0x${string}`,
+    abi: contracts.PublicLockV14.abi,
+    functionName: 'isLockManager',
+    args: [userAddress],
+  });
+  console.log(
+    `Is ${userAddress} the lock manager for the lock ${lockAddress} deployed on ${network}?${isLockManager}`
+  );
+  return isLockManager;
 };
 
 export const getFirstTokenIdOfOwner = async (
