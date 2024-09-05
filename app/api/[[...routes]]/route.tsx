@@ -158,7 +158,7 @@ app.hono.post('/hook-setup', async (c: Context) => {
           process.env.SIGNER_UUID!,
           '',
           {
-            replyTo: cast.hash,
+            // replyTo: cast.hash,
             embeds: [
               {
                 url: `${process.env.APP_URL}/api/frame-setup/${channelId}`,
@@ -361,13 +361,13 @@ app.frame(
 
     // Get the channel access rules
     let channelRules = await getChannelRules(channelId!);
-    textFrame = `This channel requires membership(s). To purchase or renew one, let's verify some details.`;
+    textFrame = `This channel requires a membership. To purchase or renew one, let's verify some details.`;
     if (
       status == 'initial' ||
       (status == 'response' && buttonValue == 'done')
     ) {
       // Step 1: Show the number of rules on the channel
-      dynamicIntents = [<Button value="verify">go</Button>];
+      dynamicIntents = [<Button value="verify">let's get started</Button>];
     } else if (status == 'response') {
       console.log('accesing response');
       const payload = await req.json();
@@ -528,7 +528,7 @@ app.frame(
                   FramePurchaseResult.FRAME_MEMBERSHIP_INVALID
                 ]
               );
-              textFrame = ` You don't own a valid membership for the lock "${lockName}", deployed on ${currentRule.network} network. It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key. Please sign with address ${ethAddresses[0]}.`;
+              textFrame = ` You don't own a valid membership for the lock "${lockName}", deployed on ${currentRule.network} network. It costs ${lockTokenPriceVisual} ${lockTokenSymbol} to purchase a key. Make sure to use the address ${ethAddresses[0]}.`;
 
               const allowBtn = () => {
                 if (erc20Allowance < lockPrice) {
@@ -592,7 +592,7 @@ app.frame(
             );
           }
         } else if (buttonValue?.startsWith('approval-')) {
-          textFrame = `Do you want to approve one time (default), or multiple times? (set a number higher than 1). Please sign with address ${ethAddresses[0]}.`;
+          textFrame = `Do you want to approve one time (default), or multiple times? (set a number higher than 1). Make sure to use the address ${ethAddresses[0]}.`;
           let [_, page] = buttonValue!.split('-');
           let currentPage = parseInt(page);
           let currentRule = channelRules[currentPage];
@@ -605,7 +605,7 @@ app.frame(
             currentRule.network
           );
           dynamicIntents = [
-            <TextInput placeholder="amount..." />,
+            <TextInput placeholder="number of renewals..." />,
             <Button.Transaction
               target={`/tx-approval/${currentRule.network}/${currentRule.contract_address}/${lockTokenAddress}/${lockPrice}`}
             >
@@ -714,7 +714,7 @@ app.frame('/frame-setup/:channelId', neynarMiddleware, async (c) => {
   if (status == 'initial' || (status == 'response' && buttonValue == 'done')) {
     // Step 1: Show general information about the frame
     textFrame = `Let's set up membersonly to manage your channel memberships.`;
-    dynamicIntents = [<Button value="go">go</Button>];
+    dynamicIntents = [<Button value="go">let's get started</Button>];
   } else if (status == 'response') {
     if (interactorIsChannelLead) {
       // Step 2: Show action to do, either add or remove a rule
